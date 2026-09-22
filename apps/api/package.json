@@ -1,0 +1,31 @@
+{
+  "name": "@housing360/api",
+  "private": true,
+  "version": "0.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "prisma generate && tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "eslint . --max-warnings 0",
+    "test": "echo \"no tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@housing360/types": "*",
+    "@prisma/client": "^5.20.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "pino": "^9.5.0",
+    "pino-http": "^10.3.0"
+  },
+  "devDependencies": {
+    "@housing360/config": "*",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.7.5",
+    "eslint": "^9.13.0",
+    "pino-pretty": "^11.3.0",
+    "prisma": "^5.20.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}

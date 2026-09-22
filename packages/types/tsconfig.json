@@ -1,0 +1,8 @@
+{
+  "extends": "@housing360/config/typescript/node.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,16 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Placeholder so `prisma generate` has at least one model to work with.
+// Domain models (clients, cases, assessments, ...) are added in a later change.
+model AppMeta {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+}
