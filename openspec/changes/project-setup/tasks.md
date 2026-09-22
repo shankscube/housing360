@@ -74,4 +74,4 @@
 
 - [x] 13.1 Run `turbo lint` across the workspace and confirm it passes, including the layering-boundary and no-console/no-raw-response rules
 - [x] 13.2 Run `turbo build` across the workspace and confirm every app/package builds, including empty `packages/ui`
-- [ ] 13.3 From a fresh clone (or a clean simulated checkout) with only `.env` filled in from `.env.example`, run install and then `turbo dev`, and confirm both `apps/web` and `apps/api` start cleanly with no manual steps beyond install and `.env` setup
+- [x] 13.3 From a fresh clone (or a clean simulated checkout) with only `.env` filled in from `.env.example`, run install and then `turbo dev`, and confirm both `apps/web` and `apps/api` start cleanly with no manual steps beyond install and `.env` setup
