@@ -12,6 +12,8 @@ Two assumptions, stated so they can be overridden in Phase 0 if they're wrong: T
 
 Put the design file at `docs/Housing360_Portal.html` and this document, exported, at `docs/openspec-prompts.md` before starting Phase 0, so every prompt below can point at both. Each screen prompt also carries its own field-level and behavior detail, so it doesn't depend on this project's memory once it's in the repo.
 
+**Correction (2026-09-22, after Phase 1):** Phase 0 and Phase 1 below mention a `packages/ui` workspace package for shared components — that's the historical prompt text (already executed) so it's left as-is here, but it was tried twice and reverted both times: `apps/web` is the only consumer, so shared/reusable components live at `apps/web/src/components/ui/` instead, with no separate package. See the repo's `CLAUDE.md` (Standing rules). Phase 2 onward below has been corrected to say `apps/web/src/components/ui` directly, since those prompts haven't run yet.
+
 ## Phase 0 — Project setup and scaffolding
 
 ```markdown
@@ -119,7 +121,7 @@ API:
 
 Frontend:
 - Case Operations Center page: KPI tile row (Active Cases, High Risk, Due Today, Closed Cases) using the shared `KpiTile`, a `FilterChipRow` with All Cases / My Caseload / High Risk / Due Today / Overdue / Recently Updated, and a `DataTable` with Case Number, Client Name, Subject, Status, Priority, Last Contact, Case Manager.
-- Case detail page: 7-tab layout (Overview, Plan, Services, Assessments, Referrals, HUD Data, Health and Wellness) using a shared tabs component (build it here if it doesn't exist yet in `packages/ui`, since Assessments will likely want tabbed sections too).
+- Case detail page: 7-tab layout (Overview, Plan, Services, Assessments, Referrals, HUD Data, Health and Wellness) using a shared tabs component (build it here if it doesn't exist yet in `apps/web/src/components/ui`, since Assessments will likely want tabbed sections too).
 - A `cases` Redux slice mirroring the pattern from the `clients` slice: list state, selected-case detail state, each separate.
 
 Write the spec delta for a `case-management` capability. Scenarios should cover at least: filters combine correctly, the HUD Data checklist toggle correctly hides and shows satisfied items, and each of the 6 not-yet-built tabs renders its labeled empty state without erroring.
@@ -181,7 +183,7 @@ API:
 
 Frontend:
 - A `dashboard` Redux slice with a single async thunk hitting the aggregate endpoint.
-- Compose the page from `KpiTile`, `PageHeader`, and a generic list-card component (build a `ListCard` in `packages/ui` if one doesn't already exist from Today's Tasks and Data Quality Alerts sharing the same visual pattern of a titled card containing a list of rows).
+- Compose the page from `KpiTile`, `PageHeader`, and a generic list-card component (build a `ListCard` in `apps/web/src/components/ui` if one doesn't already exist from Today's Tasks and Data Quality Alerts sharing the same visual pattern of a titled card containing a list of rows).
 
 Write the spec delta for a `home-dashboard` capability. Scenarios should cover at least: the aggregate endpoint returns correctly even when a case manager has zero of something (empty states, not errors), the Data Quality Alerts panel is clearly marked as provisional data in a code comment and in the proposal, and the four KPI tiles' numbers match what `client-management`, `assessment-tracking`, and `coordinated-entry` actually report.
 ```

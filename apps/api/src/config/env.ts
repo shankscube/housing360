@@ -16,6 +16,12 @@ export interface EnvConfig {
     password: string;
     name: string;
   };
+  auth: {
+    jwtSecret: string;
+    jwtExpiresIn: string;
+    cookieName: string;
+    webOrigin: string;
+  };
 }
 
 export const env: EnvConfig = {
@@ -27,5 +33,11 @@ export const env: EnvConfig = {
     user: required('DB_USER'),
     password: required('DB_PASSWORD'),
     name: required('DB_NAME'),
+  },
+  auth: {
+    jwtSecret: required('JWT_SECRET'),
+    jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
+    cookieName: process.env.COOKIE_NAME ?? 'h360_auth',
+    webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
   },
 };

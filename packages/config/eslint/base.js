@@ -18,7 +18,8 @@ module.exports = tseslint.config(
   {
     // ESLint/build config files run under Node/CommonJS regardless of the
     // package's runtime target, and aren't app code worth linting strictly.
-    files: ['*.config.js', '*.config.cjs', '*.config.mjs', '*.config.ts'],
+    // Matches nested config files too (e.g. a package's preview/ tooling), not just root-level ones.
+    files: ['**/*.config.js', '**/*.config.cjs', '**/*.config.mjs', '**/*.config.ts'],
     languageOptions: {
       globals: globals.node,
     },

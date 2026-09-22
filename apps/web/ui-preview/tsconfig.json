@@ -1,0 +1,7 @@
+{
+  "extends": "@housing360/config/typescript/react.json",
+  "compilerOptions": {
+    "composite": false
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
+}

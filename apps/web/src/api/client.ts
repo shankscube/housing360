@@ -5,6 +5,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 async function request<T>(path: string, init?: RequestInit): Promise<ApiResponse<T>> {
   const response = await fetch(`${BASE_URL}${path}`, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     ...init,
   });
   return (await response.json()) as ApiResponse<T>;
