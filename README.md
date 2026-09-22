@@ -4,9 +4,8 @@ Turborepo monorepo for the Housing360 rebuild: a Node.js/Express API (`apps/api`
 
 ## Structure
 
-- `apps/web` — React 18, Vite, Tailwind CSS, Redux Toolkit, TypeScript.
+- `apps/web` — React 18, Vite, Tailwind CSS, Redux Toolkit, TypeScript. UI components live in `apps/web/src/components/` (currently an empty scaffold; built out in a later phase).
 - `apps/api` — Node.js, Express, TypeScript, Prisma (MySQL by default).
-- `packages/ui` — shared, framework-agnostic React components (empty scaffold; built out in a later phase).
 - `packages/types` — shared TypeScript types/interfaces used by both apps.
 - `packages/config` — shared ESLint, Prettier, and base `tsconfig` configs.
 - `docs/` — `Housing360_Portal.html` (the approved design reference) and `prompts.md` (the prompt sequence used to plan this rebuild).

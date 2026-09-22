@@ -17,10 +17,10 @@
 - [x] 3.1 Scaffold `packages/types` package.json and tsconfig extending `packages/config`
 - [x] 3.2 Add initial shared type placeholders for the domain modules (clients, cases, assessments, coordinatedEntry, dashboard) that both apps can import
 
-## 4. packages/ui (empty scaffold)
+## 4. apps/web/src/components (empty UI scaffold)
 
-- [x] 4.1 Scaffold `packages/ui` package.json (React peer dependency) and tsconfig extending `packages/config`
-- [x] 4.2 Add a minimal placeholder export and confirm the package builds via `turbo build` with no components implemented yet
+- [x] 4.1 ~~Scaffold `packages/ui` package.json (React peer dependency) and tsconfig extending `packages/config`~~ — superseded: moved to `apps/web/src/components/` since `apps/web` is the only consumer; see design.md's "UI components: in-app" decision.
+- [x] 4.2 Add a minimal placeholder export at `apps/web/src/components/index.ts` and confirm it builds via `turbo build` with no components implemented yet
 
 ## 5. apps/api — foundation
 
@@ -73,5 +73,5 @@
 ## 13. End-to-end validation
 
 - [x] 13.1 Run `turbo lint` across the workspace and confirm it passes, including the layering-boundary and no-console/no-raw-response rules
-- [x] 13.2 Run `turbo build` across the workspace and confirm every app/package builds, including empty `packages/ui`
+- [x] 13.2 Run `turbo build` across the workspace and confirm every app/package builds, including `apps/web`'s empty `src/components/` scaffold
 - [x] 13.3 From a fresh clone (or a clean simulated checkout) with only `.env` filled in from `.env.example`, run install and then `turbo dev`, and confirm both `apps/web` and `apps/api` start cleanly with no manual steps beyond install and `.env` setup

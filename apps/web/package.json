@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@housing360/types": "*",
-    "@housing360/ui": "*",
     "@reduxjs/toolkit": "^2.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

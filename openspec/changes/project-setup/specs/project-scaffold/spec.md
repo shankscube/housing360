@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Monorepo structure
-The system SHALL provide a Turborepo monorepo containing `apps/web`, `apps/api`, `packages/ui`, `packages/types`, `packages/config`, and the existing `docs/` directory untouched, with a root `turbo.json` defining `dev`, `build`, `lint`, and `test` pipelines that cover both `apps/web` and `apps/api`.
+The system SHALL provide a Turborepo monorepo containing `apps/web`, `apps/api`, `packages/types`, `packages/config`, and the existing `docs/` directory untouched, with a root `turbo.json` defining `dev`, `build`, `lint`, and `test` pipelines that cover both `apps/web` and `apps/api`.
 
 #### Scenario: Fresh clone boots both apps
 - **WHEN** a developer clones the repo, fills in only the root `.env` from `.env.example`, installs dependencies, and runs `turbo dev`
@@ -123,12 +123,12 @@ The system SHALL provide a `packages/types` package containing TypeScript types/
 - **WHEN** a type is defined once in `packages/types`
 - **THEN** it is importable from both `apps/api` and `apps/web` via the workspace package reference, with no duplicate definition of that type in either app
 
-### Requirement: Empty shared UI package scaffold
-The system SHALL provide a `packages/ui` package scaffold (buildable, lintable, installable as a workspace dependency) with no components implemented yet, ready for component work in a future change.
+### Requirement: Empty shared UI component scaffold
+The system SHALL provide an `apps/web/src/components/` scaffold (buildable and lintable as part of `apps/web`) with no components implemented yet, ready for component work in a future change.
 
-#### Scenario: Package builds with no components
+#### Scenario: apps/web builds with no real components
 - **WHEN** `turbo build` runs across the workspace
-- **THEN** `packages/ui` builds successfully despite containing no real components, and is consumable as a workspace dependency by `apps/web`
+- **THEN** `apps/web` builds successfully despite `src/components/` containing no real components yet
 
 ### Requirement: Documented environment variables
 The repository SHALL provide a root `.env.example` file documenting every environment variable the applications expect, with no real values, and a root `README.md` describing how to run both apps, how to configure the environment, and where the design reference and prompt sequence live in `docs/`.

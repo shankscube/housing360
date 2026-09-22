@@ -18,7 +18,6 @@ Turborepo monorepo for the Housing360 rebuild: `apps/api` (Node/Express/TypeScri
 
 - `apps/web` — React 18, Vite, Tailwind, Redux Toolkit, TypeScript.
 - `apps/api` — Node.js, Express, TypeScript, Prisma.
-- `packages/ui` — shared React components. Currently an empty scaffold (no real components yet — that's a future phase).
 - `packages/types` — shared TS types/interfaces (`@housing360/types`), consumed by both apps.
 - `packages/config` — shared ESLint (flat config), Prettier, and base `tsconfig` (`@housing360/config`).
 - `docs/` — `Housing360_Portal.html` (approved design reference) and `prompts.md` (planning prompt sequence). Do not move/rename these.
@@ -41,6 +40,7 @@ Turborepo monorepo for the Housing360 rebuild: `apps/api` (Node/Express/TypeScri
 - **Theme is single-sourced**: `src/theme/tokens.ts` (colors/spacing/type scale) feeds `tailwind.config.ts`. Don't scatter inline hex/px values in components.
 - **Vite reads the root `.env`** (not `apps/web/.env`) via `envDir: '../../'` in `vite.config.ts`. Frontend env vars must be prefixed `VITE_`.
 - Route stubs exist for Home, My Clients, Cases, Assessments, Coordinated Entry (`src/routes/`) — all placeholders, verified to render with zero browser console errors.
+- **UI components live in `src/components/`** (currently an empty scaffold). This used to be a separate `packages/ui` workspace package, but since `apps/web` is the only consumer, it was moved in-app to cut the unnecessary workspace-package overhead. Only pull it back out into a `packages/` workspace if a second consumer (another app, Storybook, etc.) actually shows up.
 
 ## Commands (from repo root)
 
