@@ -1,3 +1,18 @@
 node_modules
 .env
 .claude
+
+# build output
+dist
+build
+.turbo
+apps/*/dist
+packages/*/dist
+
+# generated
+apps/api/prisma/generated
+*.tsbuildinfo
+
+# logs
+*.log
+npm-debug.log*
