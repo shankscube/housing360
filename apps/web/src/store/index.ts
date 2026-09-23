@@ -5,6 +5,7 @@ import casesReducer from './slices/casesSlice';
 import assessmentsReducer from './slices/assessmentsSlice';
 import coordinatedEntryReducer from './slices/coordinatedEntrySlice';
 import dashboardReducer from './slices/dashboardSlice';
+import intakeReducer from './slices/intakeSlice';
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +15,7 @@ export const store = configureStore({
     assessments: assessmentsReducer,
     coordinatedEntry: coordinatedEntryReducer,
     dashboard: dashboardReducer,
+    intake: intakeReducer,
   },
 });
 

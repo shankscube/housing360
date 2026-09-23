@@ -2,14 +2,20 @@ import { Prisma, DisclosureStatus as PrismaDisclosureStatus, Sex as PrismaSex } 
 import type { ClientFilter } from '@housing360/types';
 import { prisma } from './prismaClient';
 
-/** List-safe column selection — never includes `ssn`/`dob`/their disclosure columns. */
+/**
+ * List-safe column selection — never includes `ssn*`/`dob*` fields. The
+ * nested `household` select exists only so `isHeadOfHousehold` can be derived
+ * (`household.headClientId === client.id`) without a second query per row.
+ */
 const LIST_SELECT = {
   id: true,
-  name: true,
+  firstName: true,
+  lastName: true,
   sex: true,
   raceEthnicity: true,
   householdId: true,
-  isHeadOfHousehold: true,
+  relationshipToHoh: true,
+  household: { select: { headClientId: true } },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.ClientSelect;
@@ -17,20 +23,67 @@ const LIST_SELECT = {
 /** Row shape for list/duplicate-candidate queries. Has no `ssn`/`dob` fields to leak. */
 export type ClientListRow = Prisma.ClientGetPayload<{ select: typeof LIST_SELECT }>;
 
-/** Full row shape, including `ssn`/`dob` — detail/create/update only. */
-export type ClientRow = Prisma.ClientGetPayload<Record<string, never>>;
-
-/** Prisma-shaped write payload (uppercase enums, flat disclosure columns). */
-export interface ClientWriteData {
-  name: string;
-  sex: PrismaSex;
-  raceEthnicity: string;
-  ssn: string | null;
-  ssnDisclosure: PrismaDisclosureStatus;
-  dob: string | null;
-  dobDisclosure: PrismaDisclosureStatus;
-  householdId: string;
+/**
+ * `ClientListRow` plus the two values that need a follow-up query/derivation
+ * per row — `enrichListRows` produces these, `client.mapper.ts`'s
+ * `toClientListItem` only ever reads them, never computes them.
+ */
+export type EnrichedClientListRow = ClientListRow & {
   isHeadOfHousehold: boolean;
+  primaryEnrollmentStatus: string | null;
+};
+
+/** Search-endpoint column selection — list-safe fields plus DOB (plain) and masked SSN. */
+const SEARCH_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  dob: true,
+  ssnLast4: true,
+  relationshipToHoh: true,
+  sex: true,
+  veteranStatus: true,
+} satisfies Prisma.ClientSelect;
+
+export type ClientSearchRow = Prisma.ClientGetPayload<{ select: typeof SEARCH_SELECT }>;
+
+/** Full row shape, including `ssn*`/`dob` — detail/create/update only. Includes
+ * `household` for the same `isHeadOfHousehold` derivation as the list row. */
+export type ClientRow = Prisma.ClientGetPayload<{
+  include: { household: { select: { headClientId: true } } };
+}>;
+
+const DETAIL_INCLUDE = { household: { select: { headClientId: true } } } satisfies Prisma.ClientInclude;
+
+/** Prisma-shaped write payload (uppercase enums, flat disclosure columns, encrypted SSN triple). */
+export interface ClientWriteData {
+  firstName: string;
+  lastName: string;
+  title?: string | null;
+  nameDataQuality?: string | null;
+  sex: PrismaSex;
+  raceEthnicity: Prisma.InputJsonValue;
+  ssnDataQuality?: string | null;
+  ssnEncrypted?: string | null;
+  ssnHash?: string | null;
+  ssnLast4?: string | null;
+  ssnDisclosure: PrismaDisclosureStatus;
+  dob?: string | null;
+  dobDataQuality?: string | null;
+  dobDisclosure: PrismaDisclosureStatus;
+  mobile?: string | null;
+  email?: string | null;
+  veteranStatus?: string | null;
+  militaryBranch?: string | null;
+  yearEnteredService?: number | null;
+  dischargeStatus?: string | null;
+  ww2?: boolean | null;
+  koreanWar?: boolean | null;
+  vietnamWar?: boolean | null;
+  otherTheater?: boolean | null;
+  householdId?: string | null;
+  relationshipToHoh?: string | null;
 }
 
 interface FindClientsParams {
@@ -41,9 +94,11 @@ interface FindClientsParams {
 }
 
 /**
- * `withProgram`/`withCases` are contract-complete but currently trivial: no
- * `Program`/`Case` model exists yet, so those filters always match zero rows
- * (`withoutProgram`/`withoutCases` therefore match everything) — see design.md.
+ * `withProgram`/`withoutProgram` are real, backed by `ProgramEnrollment`
+ * existence via Prisma's implicit relation filter on `Client.enrollments`.
+ * `withCases`/`withoutCases` stay the old trivial placeholder — no other
+ * agent is touching `Case` linkage semantics for filtering in this change,
+ * see the model's own note below and the report back to the orchestrator.
  */
 function filterWhere(filter: ClientFilter): Prisma.ClientWhereInput {
   switch (filter) {
@@ -52,9 +107,14 @@ function filterWhere(filter: ClientFilter): Prisma.ClientWhereInput {
     case 'female':
       return { sex: 'FEMALE' };
     case 'withProgram':
+      return { enrollments: { some: {} } };
+    case 'withoutProgram':
+      return { enrollments: { none: {} } };
+    // KNOWN FOLLOWUP (out of scope for this task): withCases/withoutCases stay
+    // the always-empty/always-full placeholder from `client-management` —
+    // real Case-linkage filtering is someone else's territory in this change.
     case 'withCases':
       return { id: { equals: '__never__' } };
-    case 'withoutProgram':
     case 'withoutCases':
     case 'all':
     default:
@@ -72,7 +132,12 @@ export async function findClients({
   // MySQL's default collation (utf8mb4_general_ci / utf8mb4_unicode_ci) is
   // already case-insensitive, so plain `contains` behaves the same way.
   const where: Prisma.ClientWhereInput = {
-    AND: [filterWhere(filter), search ? { name: { contains: search } } : {}],
+    AND: [
+      filterWhere(filter),
+      search
+        ? { OR: [{ firstName: { contains: search } }, { lastName: { contains: search } }] }
+        : {},
+    ],
   };
 
   const [rows, total] = await Promise.all([
@@ -89,56 +154,109 @@ export async function findClients({
   return { rows, total };
 }
 
-export function findClientById(id: string): Promise<ClientRow | null> {
-  return prisma.client.findUnique({ where: { id } });
-}
-
-interface DuplicateCandidateParams {
-  name: string;
-  /** Plain optional values — the service decides whether it's meaningful to call this at all. */
-  dob?: string;
-  ssn?: string;
+async function getPrimaryEnrollmentStatus(clientId: string): Promise<string | null> {
+  const enrollment = await prisma.programEnrollment.findFirst({
+    where: { clientId, isPrimary: true },
+    select: { status: true },
+  });
+  return enrollment?.status ?? null;
 }
 
 /**
- * Matches on `name` (exact equality — MySQL's default collation already
- * makes this case-insensitive, so no extra normalization is needed) AND
- * `dob` AND `ssn`, when those are supplied. Only meaningful when the caller
- * has real (status `'provided'`) dob/ssn values to match against — the
- * service layer decides that, not this function.
+ * Attaches `isHeadOfHousehold` (derived from the nested `household` select)
+ * and `primaryEnrollmentStatus` (a small per-client follow-up query — list-
+ * page-sized data, not worth batching/joining for now) to each list row.
+ * Model-layer helper so `client.mapper.ts`'s list mapper can stay a pure,
+ * synchronous row -> DTO function.
+ */
+export function enrichListRows(rows: ClientListRow[]): Promise<EnrichedClientListRow[]> {
+  return Promise.all(
+    rows.map(async (row) => ({
+      ...row,
+      isHeadOfHousehold: row.household?.headClientId === row.id,
+      primaryEnrollmentStatus: await getPrimaryEnrollmentStatus(row.id),
+    }))
+  );
+}
+
+export function findClientById(id: string): Promise<ClientRow | null> {
+  return prisma.client.findUnique({ where: { id }, include: DETAIL_INCLUDE });
+}
+
+interface DuplicateCandidateParams {
+  firstName: string;
+  lastName: string;
+  /** Plain optional values — the service decides whether it's meaningful to call this at all. */
+  dob?: string;
+  /** Deterministic HMAC of the SSN (see `utils/ssn.ts`), never the raw value — that column no longer exists. */
+  ssnHash?: string;
+}
+
+/**
+ * Matches on `firstName` + `lastName` (exact equality — MySQL's default
+ * collation already makes this case-insensitive) AND `dob` AND `ssnHash`,
+ * when those are supplied. Only meaningful when the caller has real (status
+ * `'provided'`) dob/ssn values to match against — the service layer decides
+ * that, not this function.
  */
 export function findDuplicateCandidates({
-  name,
+  firstName,
+  lastName,
   dob,
-  ssn,
+  ssnHash,
 }: DuplicateCandidateParams): Promise<ClientListRow[]> {
-  const where: Prisma.ClientWhereInput = { name };
+  const where: Prisma.ClientWhereInput = { firstName, lastName };
   if (dob) {
     where.dob = dob;
   }
-  if (ssn) {
-    where.ssn = ssn;
+  if (ssnHash) {
+    where.ssnHash = ssnHash;
   }
   return prisma.client.findMany({ where, select: LIST_SELECT });
 }
 
+export function searchClientsByName(name: string): Promise<ClientSearchRow[]> {
+  return prisma.client.findMany({
+    where: { OR: [{ firstName: { contains: name } }, { lastName: { contains: name } }] },
+    select: SEARCH_SELECT,
+  });
+}
+
+/** Read-only row shape for the intake wizard's Family Members step already-saved rows. */
+const HOUSEHOLD_MEMBER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  ssnLast4: true,
+  dob: true,
+  sex: true,
+  raceEthnicity: true,
+  relationshipToHoh: true,
+  mobile: true,
+  email: true,
+} satisfies Prisma.ClientSelect;
+
+export type HouseholdMemberRow = Prisma.ClientGetPayload<{ select: typeof HOUSEHOLD_MEMBER_SELECT }>;
+
+/** Other members of a household, excluding the given client (the primary client is shown separately). */
+export function findHouseholdMembers(
+  householdId: string,
+  excludeClientId: string
+): Promise<HouseholdMemberRow[]> {
+  return prisma.client.findMany({
+    where: { householdId, id: { not: excludeClientId } },
+    select: HOUSEHOLD_MEMBER_SELECT,
+  });
+}
+
 export function createClient(data: ClientWriteData): Promise<ClientRow> {
-  return prisma.client.create({ data });
+  return prisma.client.create({ data, include: DETAIL_INCLUDE });
 }
 
 export function updateClient(id: string, data: Partial<ClientWriteData>): Promise<ClientRow> {
-  return prisma.client.update({ where: { id }, data });
+  return prisma.client.update({ where: { id }, data, include: DETAIL_INCLUDE });
 }
 
-export function countHeadOfHouseholdInHousehold(
-  householdId: string,
-  excludeClientId?: string
-): Promise<number> {
-  return prisma.client.count({
-    where: {
-      householdId,
-      isHeadOfHousehold: true,
-      ...(excludeClientId ? { id: { not: excludeClientId } } : {}),
-    },
-  });
-}
+// `countHeadOfHouseholdInHousehold` removed — head of household is now fixed
+// at `Household` creation time (`headClientId`, a real FK), not re-validated
+// on every client write. See design.md's Household decision.

@@ -22,6 +22,10 @@ export interface EnvConfig {
     cookieName: string;
     webOrigin: string;
   };
+  security: {
+    ssnEncryptionKey: string;
+    ssnHashSecret: string;
+  };
 }
 
 export const env: EnvConfig = {
@@ -39,5 +43,9 @@ export const env: EnvConfig = {
     jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
     cookieName: process.env.COOKIE_NAME ?? 'h360_auth',
     webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
+  },
+  security: {
+    ssnEncryptionKey: required('SSN_ENCRYPTION_KEY'),
+    ssnHashSecret: required('SSN_HASH_SECRET'),
   },
 };

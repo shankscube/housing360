@@ -3,7 +3,9 @@ import type { ClientFilter, ClientIntakeInput, ClientUpdateInput } from '@housin
 import {
   createClient,
   getClientById,
+  getClientIntakeSnapshot,
   listClients,
+  searchClients,
   updateClient,
 } from '../services/client.service';
 import { sendSuccess } from '../utils/responder';
@@ -48,6 +50,19 @@ export async function listClientsHandler(req: Request, res: Response, next: Next
   }
 }
 
+export async function searchClientsHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
+    if (!name) {
+      throw new AppError(400, 'name query parameter is required');
+    }
+    const results = await searchClients(name);
+    sendSuccess(res, { code: 200, message: 'Clients found', data: results });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getClientHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
@@ -61,26 +76,39 @@ export async function getClientHandler(req: Request, res: Response, next: NextFu
   }
 }
 
+export async function getClientIntakeSnapshotHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, 'Client id is required');
+    }
+    const snapshot = await getClientIntakeSnapshot(id);
+    sendSuccess(res, { code: 200, message: 'Intake snapshot retrieved', data: snapshot });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function createClientHandler(req: Request, res: Response, next: NextFunction) {
   try {
     const input = req.body as Partial<ClientIntakeInput> | undefined;
     if (
-      !input?.name ||
+      !input?.firstName ||
+      !input.lastName ||
       !input.sex ||
-      !input.raceEthnicity ||
+      !Array.isArray(input.raceEthnicity) ||
+      input.raceEthnicity.length === 0 ||
       !input.ssn ||
-      !input.dob ||
-      typeof input.isHeadOfHousehold !== 'boolean'
+      !input.dob
     ) {
-      throw new AppError(400, 'name, sex, raceEthnicity, ssn, dob, and isHeadOfHousehold are required');
+      throw new AppError(400, 'firstName, lastName, sex, raceEthnicity, ssn, and dob are required');
     }
 
-    const result = await createClient(input as ClientIntakeInput);
-    sendSuccess(res, {
-      code: result.status === 'created' ? 201 : 200,
-      message: result.status === 'created' ? 'Client created' : 'Duplicate candidates found',
-      data: result,
-    });
+    // The duplicate-check path is no longer a branch here — it's a thrown
+    // 409 the errorHandler middleware turns into a response (see `next(err)`
+    // below). Success is always a plain created `Client`, 201.
+    const client = await createClient(input as ClientIntakeInput);
+    sendSuccess(res, { code: 201, message: 'Client created', data: client });
   } catch (err) {
     next(err);
   }

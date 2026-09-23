@@ -41,23 +41,311 @@ enum DisclosureStatus {
   DATA_NOT_COLLECTED
 }
 
-// First domain entity (HUD Universal Data Elements). SSN/DOB use the
-// value-column + disclosure-status-column pattern rather than a single
-// nullable column, so "withheld" is distinguishable from "not yet asked".
+// HUD Universal Data Elements, extended (client-intake-wizard) with the
+// fields the intake wizard's Client Basic Information step captures. Every
+// HUD-coded scalar below (data-quality codes, veteran status, relationship to
+// HoH, etc.) is a plain String holding a code from
+// `apps/api/src/constants/hudOptions.ts` — that module, not a Prisma enum, is
+// the one source of truth for the code/label pairs, so adding or relabeling a
+// code never requires a migration.
 model Client {
-  id                String           @id @default(uuid())
-  name              String
-  sex               Sex
-  raceEthnicity     String
-  ssn               String?
-  ssnDisclosure     DisclosureStatus
-  dob               String?
-  dobDisclosure     DisclosureStatus
-  householdId       String
-  isHeadOfHousehold Boolean
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  id              String  @id @default(uuid())
+  firstName       String
+  lastName        String
+  title           String?
+  nameDataQuality String?
+  sex             Sex
+  // HUD 3.04 — multi-value, including the "8"/"9"/"99" codes.
+  raceEthnicity   Json
+
+  // SSN (HUD Universal Data Element + 3.02 data quality): encrypted value +
+  // deterministic hash (duplicate matching) + last4 (display) replace the old
+  // plaintext column — see design.md's SSN decision.
+  ssnDataQuality String?
+  ssnEncrypted   String?          @db.VarChar(255)
+  ssnHash        String?
+  ssnLast4       String?
+  ssnDisclosure  DisclosureStatus
+
+  // DOB (HUD Universal Data Element + 3.03 data quality) — unaffected by the
+  // SSN encryption change, still the value-column + disclosure-status pair.
+  dob            String?
+  dobDataQuality String?
+  dobDisclosure  DisclosureStatus
+
+  mobile String?
+  email  String?
+
+  // HUD 3.07 Veteran Status + detail, populated only when veteranStatus is "yes".
+  veteranStatus      String?
+  militaryBranch     String?
+  yearEnteredService Int?
+  dischargeStatus    String?
+  ww2                Boolean?
+  koreanWar          Boolean?
+  vietnamWar         Boolean?
+  otherTheater       Boolean?
+
+  // Household: `householdId` is a real FK (see `Household` below), not a bare
+  // generated grouping string. `relationshipToHoh` (HUD 3.15) is informational
+  // metadata on every member including the head — whether a client *is* the
+  // head is answered by `Household.headClientId`, never by this field.
+  householdId       String?
+  household         Household? @relation("HouseholdMembers", fields: [householdId], references: [id])
+  headOfHousehold   Household? @relation("HouseholdHead")
+  relationshipToHoh String?
+
+  enrollments          ProgramEnrollment[]
+  cases                Case[]
+  assessments          Assessment[]
+  interactionSummaries InteractionSummary[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([householdId])
-  @@index([name, dob])
+  @@index([lastName, firstName])
+  @@index([ssnHash])
+  @@index([dob])
+}
+
+// A household is created after its head client already exists (see
+// design.md) — `headClientId` is fixed at creation time and never
+// reassigned, which is what makes "exactly one head" a schema-level
+// guarantee rather than a service-layer race check.
+model Household {
+  id           String   @id @default(uuid())
+  headClientId String   @unique
+  headClient   Client   @relation("HouseholdHead", fields: [headClientId], references: [id])
+  members      Client[] @relation("HouseholdMembers")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Seeded (3-5 active rows), not user-creatable in this phase.
+model Program {
+  id          String              @id @default(uuid())
+  name        String
+  isActive    Boolean             @default(true)
+  enrollments ProgramEnrollment[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model ProgramEnrollment {
+  id                   String   @id @default(uuid())
+  clientId             String
+  client               Client   @relation(fields: [clientId], references: [id])
+  householdId          String?
+  programId            String
+  program              Program  @relation(fields: [programId], references: [id])
+  name                 String
+  startDate            DateTime
+  status               String
+  relationshipToHoh    String?
+  disablingCondition   String?
+  enrollmentCoc        String?
+  programCaseManagerId String?
+  isPrimary            Boolean  @default(false)
+
+  cases       Case[]
+  assessments Assessment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([programId])
+}
+
+// Minimal case — created idempotently per (client, enrollment) via
+// `POST /api/cases/ensure`'s upsert against the compound unique key below.
+model Case {
+  id                  String            @id @default(uuid())
+  clientId            String
+  client              Client            @relation(fields: [clientId], references: [id])
+  programEnrollmentId String
+  programEnrollment   ProgramEnrollment @relation(fields: [programEnrollmentId], references: [id])
+  status              String            @default("open")
+
+  assessments          Assessment[]
+  interactionSummaries InteractionSummary[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, programEnrollmentId])
+}
+
+// Entry-stage (dataCollectionStage = 1) HUD assessment. One row per
+// (programEnrollmentId, dataCollectionStage) — enforced by the compound
+// unique key so re-saving the same enrollment's Entry Assessment is always an
+// upsert, never a second row. Carries all three of the wizard's Living
+// Situation / Income & Benefits & Insurance / Health & DV sections, since
+// steps 4-6 persist as one record (see design.md).
+model Assessment {
+  id                  String            @id @default(uuid())
+  clientId            String
+  client              Client            @relation(fields: [clientId], references: [id])
+  programEnrollmentId String
+  programEnrollment   ProgramEnrollment @relation(fields: [programEnrollmentId], references: [id])
+  caseId              String
+  case                Case              @relation(fields: [caseId], references: [id])
+  dataCollectionStage Int               @default(1)
+  assessmentDate      DateTime          @default(now())
+  status              String            @default("in_progress")
+
+  // Living situation (HUD 3.917)
+  situationCategory               String?
+  situation                       String?
+  locationDetails                 String?
+  leaseOwn60Day                   String?
+  leaveSituation14Days            String?
+  monthsHomelessPast3Years        String?
+  movedTwoOrMore                  String?
+  resourcesToObtain               String?
+  stayLessThan7Nights             String?
+  subsequentResidence             String?
+  institutionalStayLessThan90Days String?
+  rentalSubsidyType               String?
+  chronicHomelessness             String?
+  nightBeforeStreetsEsSh          String?
+  timesHomelessPast3Years         String?
+  lengthOfStay                    String?
+  verifiedBy                      String?
+
+  // Income (HUD 4.02) — each source is a Yes/No code plus an amount.
+  incomeFromAnySource                  String?
+  earnedIncome                         String?
+  earnedIncomeAmount                   Decimal? @db.Decimal(10, 2)
+  ssiIncome                            String?
+  ssiIncomeAmount                      Decimal? @db.Decimal(10, 2)
+  ssdiIncome                           String?
+  ssdiIncomeAmount                     Decimal? @db.Decimal(10, 2)
+  unemploymentIncome                   String?
+  unemploymentIncomeAmount             Decimal? @db.Decimal(10, 2)
+  vaServiceConnectedIncome             String?
+  vaServiceConnectedIncomeAmount       Decimal? @db.Decimal(10, 2)
+  vaNonServiceIncome                   String?
+  vaNonServiceIncomeAmount             Decimal? @db.Decimal(10, 2)
+  privateDisabilityIncome              String?
+  privateDisabilityIncomeAmount        Decimal? @db.Decimal(10, 2)
+  workersCompIncome                    String?
+  workersCompIncomeAmount              Decimal? @db.Decimal(10, 2)
+  tanfIncome                           String?
+  tanfIncomeAmount                     Decimal? @db.Decimal(10, 2)
+  generalAssistanceIncome              String?
+  generalAssistanceIncomeAmount        Decimal? @db.Decimal(10, 2)
+  socialSecurityRetirementIncome       String?
+  socialSecurityRetirementIncomeAmount Decimal? @db.Decimal(10, 2)
+  pensionIncome                        String?
+  pensionIncomeAmount                  Decimal? @db.Decimal(10, 2)
+  childSupportIncome                   String?
+  childSupportIncomeAmount             Decimal? @db.Decimal(10, 2)
+  alimonyIncome                        String?
+  alimonyIncomeAmount                  Decimal? @db.Decimal(10, 2)
+  otherIncome                          String?
+  otherIncomeAmount                    Decimal? @db.Decimal(10, 2)
+  otherIncomeSpecify                   String?
+
+  // Non-cash benefits (HUD 4.03)
+  benefitsFromAnySource     String?
+  snapBenefit               String?
+  wicBenefit                String?
+  tanfChildCareBenefit      String?
+  tanfTransportationBenefit String?
+  otherTanfBenefit          String?
+  soarConnection            String?
+  otherBenefitSource        String?
+  otherBenefitSourceSpecify String?
+
+  // Health insurance (HUD 4.04) — each type is a Yes/No code plus a "no
+  // reason" code (only meaningful when that type is "No").
+  insuranceFromAnySource      String?
+  coveredByHealthInsurance    String?
+  medicaid                    String?
+  medicaidNoReason            String?
+  medicare                    String?
+  medicareNoReason            String?
+  schip                       String?
+  schipNoReason               String?
+  vha                         String?
+  vhaNoReason                 String?
+  employerInsurance           String?
+  employerInsuranceNoReason   String?
+  cobra                       String?
+  cobraNoReason               String?
+  privatePayInsurance         String?
+  privatePayInsuranceNoReason String?
+  stateInsurance              String?
+  stateInsuranceNoReason      String?
+  ihs                         String?
+  ihsNoReason                 String?
+  adap                        String?
+  adapNoReason                String?
+  ryanWhite                   String?
+  ryanWhiteNoReason           String?
+  otherInsurance              String?
+  otherInsuranceNoReason      String?
+  otherInsuranceSpecify       String?
+
+  // Health and DV (HUD 4.11, R-series)
+  generalHealthStatus      String?
+  dentalHealthStatus       String?
+  mentalHealthStatus       String?
+  pregnancyStatus          String?
+  pregnancyDueDate         DateTime?
+  domesticViolenceSurvivor String?
+  dvWhenOccurred           String?
+  dvCurrentlyFleeing       String?
+
+  disabilities Disability[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([programEnrollmentId, dataCollectionStage])
+}
+
+// Child of Assessment (HUD 4.05-4.10). One row per disability record; the
+// wizard adds/removes these one at a time rather than editing a fixed set.
+model Disability {
+  id                   String     @id @default(uuid())
+  assessmentId         String
+  assessment           Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  disabilityType       String
+  response             String
+  indefiniteAndImpairs String?
+
+  // HIV/AIDS-only fields — populated only when disabilityType is "hivAids" and response is "Yes".
+  antiRetroviral     String?
+  tCellAvailable     String?
+  tCellCount         Int?
+  tCellSource        String?
+  viralLoadAvailable String?
+  viralLoad          String?
+  viralLoadSource    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([assessmentId])
+}
+
+model InteractionSummary {
+  id           String  @id @default(uuid())
+  clientId     String
+  client       Client  @relation(fields: [clientId], references: [id])
+  caseId       String
+  case         Case    @relation(fields: [caseId], references: [id])
+  title        String
+  status       String
+  meetingNotes String? @db.Text
+  nextSteps    String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([caseId])
 }

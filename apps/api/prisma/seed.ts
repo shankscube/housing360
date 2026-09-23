@@ -25,6 +25,27 @@ async function main() {
   });
 
   logger.info({ email: user.email }, 'Seeded case-manager user');
+
+  await seedPrograms();
+}
+
+const PROGRAMS = [
+  'Rapid Re-Housing',
+  'Permanent Supportive Housing',
+  'Emergency Shelter',
+  'Street Outreach',
+  'Homelessness Prevention',
+];
+
+async function seedPrograms() {
+  for (const name of PROGRAMS) {
+    await prisma.program.upsert({
+      where: { id: name },
+      update: { name, isActive: true },
+      create: { id: name, name, isActive: true },
+    });
+  }
+  logger.info({ count: PROGRAMS.length }, 'Seeded active programs');
 }
 
 main()

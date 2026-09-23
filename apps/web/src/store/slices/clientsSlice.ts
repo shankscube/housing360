@@ -2,11 +2,9 @@ import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/tool
 import type {
   Client,
   ClientFilter,
-  ClientIntakeInput,
   ClientListItem,
   ClientListQuery,
   ClientListResult,
-  CreateClientResult,
 } from '@housing360/types';
 import { apiClient } from '../../api/client';
 
@@ -29,16 +27,13 @@ interface ClientsDetailState {
   error: string | null;
 }
 
-interface ClientsIntakeFormState {
-  candidates: ClientListItem[];
-  status: 'idle' | 'submitting' | 'duplicates_found' | 'succeeded' | 'failed';
-  error: string | null;
-}
-
+// `intakeForm` sub-state (create-client/duplicate-candidate flow) moved to
+// `intakeSlice` — client creation now happens through the `IntakeWizard`,
+// not this slice. This slice keeps the two concerns My Clients still owns:
+// the paginated list and the (currently unused elsewhere) single-client detail.
 interface ClientsState {
   list: ClientsListState;
   detail: ClientsDetailState;
-  intakeForm: ClientsIntakeFormState;
 }
 
 const initialState: ClientsState = {
@@ -54,11 +49,6 @@ const initialState: ClientsState = {
   },
   detail: {
     client: null,
-    status: 'idle',
-    error: null,
-  },
-  intakeForm: {
-    candidates: [],
     status: 'idle',
     error: null,
   },
@@ -96,17 +86,6 @@ export const fetchClientById = createAsyncThunk(
   }
 );
 
-export const createClient = createAsyncThunk(
-  'clients/createClient',
-  async (input: ClientIntakeInput, { rejectWithValue }) => {
-    const response = await apiClient.post<CreateClientResult>('/api/clients', input);
-    if (!response.success) {
-      return rejectWithValue(response.message);
-    }
-    return response.data;
-  }
-);
-
 const clientsSlice = createSlice({
   name: 'clients',
   initialState,
@@ -129,13 +108,6 @@ const clientsSlice = createSlice({
     },
     clearSelectedClient(state) {
       state.detail = { ...initialState.detail };
-    },
-    setDuplicateCandidates(state, action: PayloadAction<ClientListItem[]>) {
-      state.intakeForm.candidates = action.payload;
-      state.intakeForm.status = 'duplicates_found';
-    },
-    resetIntakeForm(state) {
-      state.intakeForm = { ...initialState.intakeForm };
     },
   },
   extraReducers: (builder) => {
@@ -167,36 +139,11 @@ const clientsSlice = createSlice({
       .addCase(fetchClientById.rejected, (state, action) => {
         state.detail.status = 'failed';
         state.detail.error = (action.payload as string | undefined) ?? 'Failed to fetch client';
-      })
-
-      .addCase(createClient.pending, (state) => {
-        state.intakeForm.status = 'submitting';
-        state.intakeForm.error = null;
-      })
-      .addCase(createClient.fulfilled, (state, action) => {
-        if (action.payload.status === 'duplicates_found') {
-          state.intakeForm.status = 'duplicates_found';
-          state.intakeForm.candidates = action.payload.candidates;
-        } else {
-          state.intakeForm.status = 'succeeded';
-          state.intakeForm.candidates = [];
-        }
-      })
-      .addCase(createClient.rejected, (state, action) => {
-        state.intakeForm.status = 'failed';
-        state.intakeForm.error = (action.payload as string | undefined) ?? 'Failed to create client';
       });
   },
 });
 
-export const {
-  setListFilter,
-  setListPage,
-  setSearchTerm,
-  selectClient,
-  clearSelectedClient,
-  setDuplicateCandidates,
-  resetIntakeForm,
-} = clientsSlice.actions;
+export const { setListFilter, setListPage, setSearchTerm, selectClient, clearSelectedClient } =
+  clientsSlice.actions;
 
 export default clientsSlice.reducer;

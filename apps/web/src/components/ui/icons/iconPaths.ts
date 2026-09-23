@@ -55,6 +55,11 @@ export const ICON_SHAPES = {
   chevronLeft: { paths: ['m15 18-6-6 6-6'] },
   chevronRight: { paths: ['m9 18 6-6-6-6'] },
   logout: { paths: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'm16 17 5-5-5-5', 'M21 12H9'] },
+  /** DualListbox's "move all" buttons — a double chevron, same idiom as chevronLeft/Right. */
+  chevronsRight: { paths: ['m7 18 6-6-6-6', 'm14 18 6-6-6-6'] },
+  chevronsLeft: { paths: ['m17 18-6-6 6-6', 'm10 18-6-6 6-6'] },
+  /** Toast's dismiss control. */
+  close: { paths: ['M6 6l12 12', 'M18 6 6 18'] },
 } as const satisfies Record<string, IconShape>;
 
 export type IconName = keyof typeof ICON_SHAPES;

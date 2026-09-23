@@ -6,6 +6,9 @@ import { filterChipRowPreview } from './stories/FilterChipRow.stories';
 import { dataTablePreview } from './stories/DataTable.stories';
 import { pageHeaderPreview } from './stories/PageHeader.stories';
 import { statusStepperPreview } from './stories/StatusStepper.stories';
+import { gatedFieldPreview } from './stories/GatedField.stories';
+import { dualListboxPreview } from './stories/DualListbox.stories';
+import { stepRailPreview } from './stories/StepRail.stories';
 import type { ComponentPreview } from './stories/types';
 
 const PREVIEWS: ComponentPreview[] = [
@@ -17,6 +20,9 @@ const PREVIEWS: ComponentPreview[] = [
   dataTablePreview,
   pageHeaderPreview,
   statusStepperPreview,
+  gatedFieldPreview,
+  dualListboxPreview,
+  stepRailPreview,
 ];
 
 /**

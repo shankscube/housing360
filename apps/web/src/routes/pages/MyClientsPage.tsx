@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ClientFilter, ClientListItem } from '@housing360/types';
 import { ContentAreaTemplate } from '../../components/layout/ContentAreaTemplate';
-import { Button, DataTable, FilterChipRow, type DataTableColumn } from '../../components/ui';
+import { Button, DataTable, FilterChipRow, StatusBadge, type DataTableColumn } from '../../components/ui';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
   fetchClients,
@@ -9,7 +9,7 @@ import {
   setListPage,
   setSearchTerm,
 } from '../../store/slices/clientsSlice';
-import { NewIntakeForm } from './clients/NewIntakeForm';
+import { IntakeWizard } from '../../features/intake/IntakeWizard';
 
 const FILTER_OPTIONS: { value: ClientFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -29,7 +29,26 @@ const COLUMN_LABELS = {
   dob: 'Date of Birth',
   sex: 'Sex',
   raceEthnicity: 'Race and Ethnicity',
+  programStatus: 'Program Status',
 } as const;
+
+/**
+ * `active`/`pending` map to the bundle's own "Enrolled"/"Awaiting referral"
+ * program-status words (already registered in `statusToneByLabel.ts`, teal/
+ * gold respectively). Any other non-null status (e.g. `exited`) falls back to
+ * its capitalized raw value, which resolves to the map's deemphasized default
+ * tone rather than the bundle's third word, "Intake started" — that word
+ * specifically means "has a case but no active/pending enrollment yet", a
+ * distinction `ClientListItem.primaryEnrollmentStatus` can't make on its own
+ * (it only reflects enrollment status, not case existence). A real fix needs
+ * that signal added to the list payload — flagged, not fixed, here.
+ */
+function programStatusLabel(status: string | null): string | null {
+  if (!status) return null;
+  if (status === 'active') return 'Enrolled';
+  if (status === 'pending') return 'Awaiting referral';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
 
 /**
  * `DataTable`'s row type must satisfy `Record<string, unknown>`. `ClientListItem`
@@ -46,7 +65,7 @@ export function MyClientsPage() {
   );
 
   const [searchInput, setSearchInput] = useState(search);
-  const [showIntakeForm, setShowIntakeForm] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
 
   // Debounce the search box into the store's search term rather than
   // dispatching (and re-fetching) on every keystroke.
@@ -65,13 +84,33 @@ export function MyClientsPage() {
     dispatch(setListFilter(value as ClientFilter));
   }
 
-  function handleClientCreated() {
-    setShowIntakeForm(false);
+  function refetchList() {
     dispatch(fetchClients({ page, pageSize, filter, search }));
   }
 
+  function handleWizardClose() {
+    setShowWizard(false);
+    refetchList();
+  }
+
+  function handleViewClient() {
+    // No client-detail screen exists yet (see design.md's Open Questions) —
+    // the newest client sorts to the top of an unfiltered, first-page list
+    // (`findClients` orders by `createdAt desc`), so surfacing it just means
+    // clearing any active filter/search and jumping to page 1, then closing.
+    setShowWizard(false);
+    setSearchInput('');
+    dispatch(setSearchTerm(''));
+    dispatch(setListFilter('all'));
+    dispatch(setListPage(1));
+  }
+
   const columns: DataTableColumn<ClientTableRow>[] = [
-    { key: 'name', header: COLUMN_LABELS.name, cell: (row) => row.name },
+    {
+      key: 'name',
+      header: COLUMN_LABELS.name,
+      cell: (row) => `${row.firstName} ${row.lastName}`,
+    },
     {
       key: 'ssn',
       header: COLUMN_LABELS.ssn,
@@ -93,7 +132,22 @@ export function MyClientsPage() {
       cell: () => '••••••••',
     },
     { key: 'sex', header: COLUMN_LABELS.sex, cell: (row) => SEX_LABELS[row.sex] ?? row.sex },
-    { key: 'raceEthnicity', header: COLUMN_LABELS.raceEthnicity, cell: (row) => row.raceEthnicity },
+    {
+      key: 'raceEthnicity',
+      header: COLUMN_LABELS.raceEthnicity,
+      // Raw HUD codes, joined — resolving to labels needs the HUD option
+      // lists this screen doesn't otherwise load (see intake's `hudOptions`
+      // thunk); a reasonable simplification, not a data gap.
+      cell: (row) => row.raceEthnicity.join(', ') || '—',
+    },
+    {
+      key: 'programStatus',
+      header: COLUMN_LABELS.programStatus,
+      cell: (row) => {
+        const label = programStatusLabel(row.primaryEnrollmentStatus);
+        return label ? <StatusBadge label={label} /> : '—';
+      },
+    },
   ];
 
   const hasActiveFilterOrSearch = filter !== 'all' || search.trim() !== '';
@@ -110,7 +164,7 @@ export function MyClientsPage() {
         <div className="flex flex-col gap-5 px-9 py-7">
           <div className="flex flex-wrap items-center justify-between gap-6">
             <FilterChipRow options={FILTER_OPTIONS} activeValue={filter} onChange={handleFilterChange} />
-            <Button variant="secondary" size="sm" onClick={() => setShowIntakeForm((open) => !open)}>
+            <Button variant="secondary" size="sm" onClick={() => setShowWizard(true)}>
               New Intake
             </Button>
           </div>
@@ -124,10 +178,6 @@ export function MyClientsPage() {
           />
         </div>
 
-        {showIntakeForm ? (
-          <NewIntakeForm onCreated={handleClientCreated} onCancel={() => setShowIntakeForm(false)} />
-        ) : null}
-
         <div className="bg-surfaceMuted px-9 py-4">
           <p className="text-xs text-textMuted">
             Columns follow HUD Universal Data Elements. Duplicate check on name + DOB + SSN runs
@@ -137,13 +187,20 @@ export function MyClientsPage() {
 
         <DataTable<ClientTableRow>
           columns={columns}
-          rows={items}
+          // `ClientListItem` structurally lacks an index signature, so it
+          // doesn't satisfy `ClientTableRow`'s `Record<string, unknown>` half
+          // without a cast, even though `ClientTableRow extends ClientListItem`.
+          rows={items as ClientTableRow[]}
           rowKey={(row) => row.id}
           isLoading={status === 'loading'}
           emptyMessage={emptyMessage}
           pagination={{ page, pageSize, total, onPageChange: (nextPage) => dispatch(setListPage(nextPage)) }}
         />
       </div>
+
+      {showWizard ? (
+        <IntakeWizard onClose={handleWizardClose} onViewClient={handleViewClient} />
+      ) : null}
     </ContentAreaTemplate>
   );
 }
