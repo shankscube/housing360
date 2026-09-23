@@ -1,6 +1,5 @@
 import { Icon } from '../ui';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { logout } from '../../store/slices/authSlice';
+import { useAppSelector } from '../../store/hooks';
 
 const NOTIFICATIONS_UNREAD_STUB_COUNT = 0;
 
@@ -12,9 +11,10 @@ const controlCardClass = 'flex items-center rounded-lg bg-surface shadow-control
  * transparent background; it has no notifications bell or settings control.
  * Those are required by the `shared-ui` spec, so they stay — restyled into
  * the same control idiom rather than given a look of their own.
+ *
+ * Log out lives on the nav rail's user card (click it), not here.
  */
 export function TopBar() {
-  const dispatch = useAppDispatch();
   const currentUser = useAppSelector((state) => state.auth.currentUser);
 
   return (
@@ -53,19 +53,10 @@ export function TopBar() {
         </button>
 
         {currentUser ? (
-          <div className={`${controlCardClass} gap-4 px-6 py-4`}>
+          <div className={`${controlCardClass} px-6 py-4`}>
             <span className="text-sm text-textMuted">
               Welcome, <span className="font-semibold text-ink">{currentUser.firstName}</span>
             </span>
-            <button
-              type="button"
-              onClick={() => dispatch(logout())}
-              aria-label="Log out"
-              className="flex items-center gap-2 rounded-sm px-2.5 py-2 text-xs font-semibold text-textMuted transition-colors hover:bg-surfaceSubtle hover:text-ink"
-            >
-              <Icon name="logout" size={14} />
-              Log out
-            </button>
           </div>
         ) : null}
       </div>

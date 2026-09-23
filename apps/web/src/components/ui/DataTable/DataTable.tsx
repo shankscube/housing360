@@ -1,4 +1,12 @@
 import type { ReactNode } from 'react';
+import { Icon } from '../icons';
+
+export interface DataTablePagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}
 
 export interface DataTableColumn<T> {
   key: string;
@@ -31,6 +39,8 @@ export interface DataTableProps<T> {
   isLoading?: boolean;
   /** Shown in the empty-state row when there are no rows and nothing is loading. */
   emptyMessage?: string;
+  /** Every table backed by paginated data passes this so the footer is never a per-screen build. */
+  pagination?: DataTablePagination;
 }
 
 const cellClass = 'px-9 py-5.5 text-base';
@@ -43,6 +53,7 @@ export function DataTable<T extends Record<string, unknown>>({
   rowActions,
   isLoading = false,
   emptyMessage = 'No records found.',
+  pagination,
 }: DataTableProps<T>) {
   const hasRowActions = Boolean(rowActions && rowActions.length > 0);
   const columnCount = columns.length + (hasRowActions ? 1 : 0);
@@ -102,7 +113,53 @@ export function DataTable<T extends Record<string, unknown>>({
           ))
         )}
       </tbody>
+      {pagination ? (
+        <tfoot>
+          <tr>
+            <td colSpan={columnCount} className="border-t border-borderRow px-9 py-4.5">
+              <PaginationFooter {...pagination} />
+            </td>
+          </tr>
+        </tfoot>
+      ) : null}
     </table>
+  );
+}
+
+function PaginationFooter({ page, pageSize, total, onPageChange }: DataTablePagination) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 text-sm text-textMuted">
+      <span>
+        {total === 0 ? '0 results' : `${rangeStart}–${rangeEnd} of ${total}`}
+      </span>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          aria-label="Previous page"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className="rounded-sm p-2 text-textMuted transition-colors hover:bg-surfaceSubtle hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-textMuted"
+        >
+          <Icon name="chevronLeft" size={14} />
+        </button>
+        <span className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide">
+          Page {page} of {totalPages}
+        </span>
+        <button
+          type="button"
+          aria-label="Next page"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="rounded-sm p-2 text-textMuted transition-colors hover:bg-surfaceSubtle hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-textMuted"
+        >
+          <Icon name="chevronRight" size={14} />
+        </button>
+      </div>
+    </div>
   );
 }
 

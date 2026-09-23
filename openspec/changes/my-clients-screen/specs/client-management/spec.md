@@ -109,15 +109,15 @@ The system SHALL provide an endpoint to update an existing client's fields, incl
 - **THEN** the client record reflects the updated values on subsequent reads
 
 ### Requirement: My Clients List Screen
-The system SHALL provide a My Clients screen displaying clients in a table (name, masked SSN, date of birth, sex, race and ethnicity), with a single-select filter row (all, male, female, with program, without program, with cases, without cases), a user-controlled column-visibility control, and a new-intake entry point.
+The system SHALL provide a My Clients screen displaying clients in a paginated table (name, masked SSN, date of birth, sex, race and ethnicity), with a single-select filter row (all, male, female, with program, without program, with cases, without cases) and a new-intake entry point.
 
 #### Scenario: SSN is masked in the client table
 - **WHEN** the My Clients table renders a client row
 - **THEN** the SSN column displays only the last 4 digits, not the full SSN
 
-#### Scenario: Column visibility control hides a column
-- **WHEN** a user deselects a column in the column-visibility control
-- **THEN** that column no longer renders in the client table
+#### Scenario: Table pagination reflects the active page
+- **WHEN** the client list has more rows than fit on one page
+- **THEN** the table shows pagination controls and only the current page's rows
 
 #### Scenario: Filter row is single-select
 - **WHEN** a user selects a different filter chip in the My Clients filter row

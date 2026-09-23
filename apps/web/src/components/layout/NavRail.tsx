@@ -1,6 +1,9 @@
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import { Icon } from '../ui';
-import { useAppSelector } from '../../store/hooks';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { logout } from '../../store/slices/authSlice';
 import { NAV_ITEMS, type NavItem } from './navConfig';
 import { useReferralsBadgeCount } from './useReferralsBadgeCount';
 
@@ -131,8 +134,33 @@ function NavRailEntry({ item, collapsed, referralsBadgeCount }: NavRailEntryProp
   );
 }
 
+interface MenuPosition {
+  left: number;
+  bottom: number;
+}
+
 function UserCard({ collapsed }: { collapsed: boolean }) {
+  const dispatch = useAppDispatch();
   const currentUser = useAppSelector((state) => state.auth.currentUser);
+  const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuPosition) {
+      return;
+    }
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target)) {
+        return;
+      }
+      if (!(target instanceof Element) || !target.closest('[data-account-menu]')) {
+        setMenuPosition(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuPosition]);
 
   if (!currentUser) {
     return null;
@@ -141,22 +169,68 @@ function UserCard({ collapsed }: { collapsed: boolean }) {
   const initials = `${currentUser.firstName.charAt(0)}${currentUser.lastName.charAt(0)}`;
   const fullName = `${currentUser.firstName} ${currentUser.lastName}`;
 
+  function toggleMenu() {
+    if (menuPosition) {
+      setMenuPosition(null);
+      return;
+    }
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+    // Opens to the icon's bottom right — a fixed-position portal so the nav
+    // rail's own `overflow-hidden` (needed for the collapse animation) can't
+    // clip it.
+    setMenuPosition({ left: rect.right + 8, bottom: window.innerHeight - rect.bottom });
+  }
+
   return (
-    <div
-      className={`mb-7 flex items-center gap-4 rounded-xl bg-surfaceApp py-5 ${
-        collapsed ? 'mx-4 justify-center px-4' : 'mx-6 px-5.5'
-      }`}
-      title={collapsed ? fullName : undefined}
-    >
-      <span className="flex h-avatar w-avatar shrink-0 items-center justify-center rounded-full bg-ink text-sm font-bold text-teal">
-        {initials}
-      </span>
-      {collapsed ? null : (
-        <div className="min-w-0 leading-tight">
-          <div className="truncate text-sm font-semibold text-ink">{fullName}</div>
-          <div className="truncate text-xs text-textMuted">{currentUser.email}</div>
-        </div>
-      )}
+    <div className={collapsed ? 'mx-4 mb-7' : 'mx-6 mb-7'}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={toggleMenu}
+        aria-haspopup="menu"
+        aria-expanded={menuPosition !== null}
+        aria-label={`Account menu for ${fullName}`}
+        title={collapsed ? fullName : undefined}
+        className={`flex w-full items-center gap-4 rounded-xl bg-surfaceApp py-5 transition-colors hover:bg-surfaceHover ${
+          collapsed ? 'justify-center px-4' : 'px-5.5'
+        }`}
+      >
+        <span className="flex h-avatar w-avatar shrink-0 items-center justify-center rounded-full bg-ink text-sm font-bold text-teal">
+          {initials}
+        </span>
+        {collapsed ? null : (
+          <div className="min-w-0 flex-1 truncate leading-tight">
+            <div className="truncate text-sm font-semibold text-ink">{fullName}</div>
+            <div className="truncate text-xs text-textMuted">{currentUser.email}</div>
+          </div>
+        )}
+      </button>
+
+      {menuPosition
+        ? createPortal(
+            <div
+              data-account-menu
+              style={{ position: 'fixed', left: menuPosition.left, bottom: menuPosition.bottom }}
+              className="z-50 w-menuWidth rounded-lg bg-surface py-2 shadow-lifted"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuPosition(null);
+                  dispatch(logout());
+                }}
+                className="flex w-full items-center gap-3 px-5 py-3 text-left text-sm font-medium text-textMuted transition-colors hover:bg-surfaceHover hover:text-ink"
+              >
+                <Icon name="logout" size={14} />
+                Log out
+              </button>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

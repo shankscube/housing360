@@ -24,3 +24,40 @@ model User {
   lastName     String
   createdAt    DateTime @default(now())
 }
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+}
+
+// Per-field disclosure status for sensitive fields (SSN, DOB, and future
+// sensitive fields) — see openspec/changes/my-clients-screen/design.md's
+// "disclosure field" pattern.
+enum DisclosureStatus {
+  PROVIDED
+  CLIENT_DOESNT_KNOW
+  PREFERS_NOT_TO_ANSWER
+  DATA_NOT_COLLECTED
+}
+
+// First domain entity (HUD Universal Data Elements). SSN/DOB use the
+// value-column + disclosure-status-column pattern rather than a single
+// nullable column, so "withheld" is distinguishable from "not yet asked".
+model Client {
+  id                String           @id @default(uuid())
+  name              String
+  sex               Sex
+  raceEthnicity     String
+  ssn               String?
+  ssnDisclosure     DisclosureStatus
+  dob               String?
+  dobDisclosure     DisclosureStatus
+  householdId       String
+  isHeadOfHousehold Boolean
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([householdId])
+  @@index([name, dob])
+}

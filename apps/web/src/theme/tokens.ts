@@ -241,4 +241,6 @@ export const layout = {
   avatar: '34px',
   /** The wordmark's rendered width in the bundle's rail. */
   logo: '154px',
+  /** The nav rail user-card's account-menu popover (log out). */
+  menuWidth: '176px',
 };
