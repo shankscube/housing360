@@ -4,9 +4,9 @@
 
 ## How to use this document
 
-Seven prompts, run in order. Each one is a single OpenSpec change: run `opsx:propose` with the prompt text as-is, review the generated proposal and spec deltas, then `opsx:apply` before moving to the next prompt. Don't start a screen's prompt before the phase before it lands; several screens share components and data that only exist once earlier phases are applied.
+Eight prompts, run in order (Phase 3b sits between Phase 3 and Phase 4). Each one is a single OpenSpec change: run `opsx:propose` with the prompt text as-is, review the generated proposal and spec deltas, then `opsx:apply` before moving to the next prompt. Don't start a screen's prompt before the phase before it lands; several screens share components and data that only exist once earlier phases are applied.
 
-Build order follows data dependency, not nav order, with one addition: Phase 2 (design system implementation) comes before any screen, because screens should consume already-styled components instead of styling them ad hoc. After that, My Clients comes before Cases, Cases before Assessments and Coordinated Entry, and Home comes last, because Home is a rollup dashboard reading from all of them. Building it first would mean building it twice.
+Build order follows data dependency, not nav order, with one addition: Phase 2 (design system implementation) comes before any screen, because screens should consume already-styled components instead of styling them ad hoc. After that, My Clients and its intake wizard (Phase 3b) come before Cases, Cases before Assessments and Coordinated Entry, and Home comes last, because Home is a rollup dashboard reading from all of them. Building it first would mean building it twice.
 
 Two assumptions, stated so they can be overridden in Phase 0 if they're wrong: TypeScript across both apps (drop the type annotations for plain JS, everything else holds), and MySQL as the primary store behind the repository layer, read from the root `.env` (if the `.env` points at MongoDB instead, only the model layer's implementation changes; the repository interfaces described below don't).
 
@@ -127,6 +127,112 @@ Frontend:
 Known gap to carry forward, not to silently fix: there is no automated alert today for a person registered in more than one household. Leave a `// TODO(household-duplicate-alert)` comment at the point in the intake service where this check would go, and note it in the change's proposal as an explicit follow-up, not something this change resolves.
 
 Write the spec delta for a `client-management` capability. Scenarios should cover at least: the duplicate check blocks a silent double-create, a disclosure field accepts all four answer states, filters combine correctly with search, and SSN never appears in a list response payload.
+```
+
+## Phase 3b — Client intake wizard
+
+```markdown
+Propose an OpenSpec change called `client-intake-wizard` that replaces the single-form New Intake from `my-clients-screen` with the full multi-step HUD client intake flow. Match the visual design in `docs/Housing360 Portal.html`. This prompt specifies data, behavior, and wiring. Shared components go in `apps/web/src/components/ui` (see CLAUDE.md standing rules). Depends on `client-management`.
+
+Scope note: this change introduces the Household, Program, ProgramEnrollment, Entry Assessment, Disability, InteractionSummary, and a minimal Case table, because intake writes to all of them. Later phases (`cases-screen`, `assessments-and-coordinated-entry`) must EXTEND these tables, not recreate them. Record that in the proposal.
+
+## Data model (repository pattern: routes → controllers → services → models)
+- `households`: id, head_client_id. `clients.household_id` and `clients.relationship_to_hoh` (HUD 3.15 codes).
+- `clients` additions: title, name_data_quality, ssn_data_quality, dob_data_quality (HUD 3.01/3.02/3.03 codes), mobile, email, veteran_status (HUD 3.07), plus veteran details (military_branch, year_entered_service, discharge_status, ww2, korean_war, vietnam_war, other_theater). Race and ethnicity is multi-value (HUD 3.04, including 8/9/99). SSN: store it encrypted, plus a hash for duplicate matching and last4 for display. Never return the full SSN in list or search payloads, and never log it.
+- `programs`: id, name, is_active (seed 3–5 active programs).
+- `program_enrollments`: client_id, household_id, program_id, name, start_date, status, relationship_to_hoh, disabling_condition (HUD 3.08), enrollment_coc, program_case_manager_id, is_primary.
+- `cases` (minimal): client_id, program_enrollment_id, status. Created idempotently per client and enrollment.
+- `assessments`: client_id, program_enrollment_id, case_id, data_collection_stage (intake always writes stage 1 = project start / Entry), assessment_date, status. It carries every field for three sections:
+  - Living situation (HUD 3.917): situation_category, situation, location_details, lease_own_60_day, leave_situation_14_days, months_homeless_past_3_years, moved_two_or_more, resources_to_obtain, stay_less_than_7_nights, subsequent_residence, institutional_stay_less_than_90_days, rental_subsidy_type, chronic_homelessness, night_before_streets_es_sh, times_homeless_past_3_years, length_of_stay, verified_by.
+  - Income, non-cash benefits, and health insurance (HUD 4.02/4.03/4.04):
+    - Income: income_from_any_source, then Yes/No plus amount for each source: earned, SSI, SSDI, unemployment, VA service-connected, VA non-service, private disability, workers' comp, TANF, general assistance, Social Security retirement, pension, child support, alimony, and other (with specify).
+    - Non-cash benefits: benefits_from_any_source, SNAP, WIC, TANF child care, TANF transportation, other TANF, connection with SOAR, other source.
+    - Health insurance: insurance_from_any_source, covered_by_health_insurance, then Yes/No plus a "no reason" for each type: Medicaid, Medicare, SCHIP, VHA, employer, COBRA, private pay, state, IHS, ADAP, Ryan White, and other (with specify).
+  - Health and DV (HUD 4.11 and R-series): general, dental, and mental health status; pregnancy_status and due_date; domestic_violence_survivor, when_occurred, currently_fleeing.
+- `disabilities` (child of assessment, HUD 4.05–4.10): disability_type, response, indefinite_and_impairs, plus HIV-only fields: anti_retroviral, t_cell_available, t_cell_count, t_cell_source, viral_load_available, viral_load, viral_load_source.
+- `interaction_summaries`: client_id, case_id, title, status, meeting_notes, next_steps.
+- HUD code lists (label and value, including 8 = client doesn't know, 9 = prefers not to answer, 99 = data not collected) are defined ONCE in a shared constants module. Serve them from `GET /api/reference/hud-options`. The frontend never hardcodes option lists.
+
+## API (all through the common responder and logger)
+- `GET /api/clients/search?name=`: name, email, DOB, masked SSN, relationship to HoH, sex, veteran.
+- `GET /api/clients/:id/intake-snapshot`: household_id, case_id, the client's enrollments (flagging the primary one), and per-enrollment Entry assessment status (none / in progress / complete, plus which sections have values, and existing disabilities).
+- `POST /api/clients` and `PATCH /api/clients/:id` (extend the existing ones): a duplicate match (name + DOB + SSN hash) returns 409 with candidates. Resending with `allowDuplicate: true` saves anyway.
+- `POST /api/households` (creates the household with the client as a member). `POST /api/households/:id/members` bulk-creates family-member clients in one transaction.
+- `GET /api/programs?active=true`, `GET /api/clients/:id/enrollments`, `POST /api/enrollments`, `PATCH /api/enrollments/:id`.
+- `POST /api/cases/ensure {clientId, enrollmentId}`: idempotent, returns the existing case or creates one.
+- `GET /api/enrollments/:id/assessments?stage=entry`, `POST /api/assessments`, `PATCH /api/assessments/:id`.
+- `POST /api/assessments/:id/disabilities` and `DELETE /api/disabilities/:id`.
+- `POST /api/interaction-summaries`.
+
+## Frontend: `apps/web/src/features/intake/`
+Build one reusable `IntakeWizard` modal with `onClose` and `onViewClient(clientId)` props, because it opens from My Clients, the Home quick action, and Referrals. Put the step config in one array (`key`, `label`, `icon`, `component`, `onNext`) so steps aren't hardcoded in the shell. Wizard state lives in an `intake` Redux slice: phase (search | form | finished), currentStep, furthestStep, completedSteps, and ids for client, household, case, enrollment, assessment, and interaction summary. Thunks go through the API client layer only.
+
+**Phase A, search.** The "Find Existing Client" card has a name input and a Search button, disabled while the input is empty; Enter also searches. Results table columns: Name (email under it), DOB, SSN (masked), Relationship to HoH, Sex, Veteran. With no results, show "No matching clients found. You can continue to create a new client." The "Continue as New Client" button is always available after a search.
+- Selecting a result loads the intake snapshot. It marks Family Members complete. If the client has enrollments, it selects the primary (or first) one, marks Program complete, calls cases/ensure, loads Entry assessment status, and marks the section steps that already hold values as complete. Then it enters the form at step 1, pre-filled.
+
+**Phase B, the form.**
+- Left rail: 8 steps, each upcoming, active, or complete. A step is clickable only if it is at or before the furthest step reached, and clicking one saves the current step first.
+- Header shows "Step N of 8" and a progress bar. Footer has Back, and a primary button labeled "Save & Next" ("Save & Finish" on the last step).
+- Missing required fields raise the toast "Missing information: Please fill in the highlighted required fields before continuing."
+
+1. **Client Basic Information.**
+   - Fields: First Name*, Last Name*, Title, Name DQ, SSN, SSN DQ, Birthdate*, DOB DQ, Sex*, Relationship to HoH*, Race and Ethnicity (dual listbox, multi), Mobile, Email, Veteran Status.
+   - Veteran Status = Yes reveals the Veteran Details section and scrolls to it.
+   - Save creates or updates the client. A 409 shows an inline warning banner with "Save Anyway" (resend with allowDuplicate) and a dismiss button, not a toast.
+   - After the first save, create the household if none exists, then advance.
+2. **Family Members.**
+   - Inline editable table: First, Last, SSN, Birthdate, Sex, Race (multi), Relationship to HoH, Mobile, Email. Rows can be added with "+ Add Family Member" and cancelled.
+   - Rows already saved are read-only, with SSN masked and labels resolved.
+   - On Next, every new row with any name must have both first and last names. If one doesn't, show the toast "Each family member needs at least a first and last name."
+   - Zero new rows skips straight ahead. Otherwise bulk-create the members in the household.
+3. **Program & Enrollment.**
+   - If the client has enrollments, show a searchable picker marked Primary, with "+ Create a new enrollment instead" and "‹ Use an existing enrollment instead" toggles.
+   - A new enrollment takes: Program* (active programs), Name (default "<Program> - <Client>"), Start Date (default today), Status, Relationship to HoH, Disabling Condition, Enrollment CoC, and Program Case Manager.
+   - On save: call cases/ensure, then load the enrollment's Entry assessment. If one exists, show "Resuming the unfinished Entry assessment already started for this enrollment." or "Already recorded for this enrollment; editing below updates that same record." If none exists, show "Not yet recorded for this enrollment."
+   - Switching enrollment resets the section steps' completion.
+4. **Living Situation.**
+   - The Situation Type category drives the Situation dependent select, using HUD 3.917 codes grouped by category (Homeless, Institutional, Temporary, Permanent, Other).
+   - Changing the type clears Situation and Rental Subsidy Type. Rental Subsidy Type is enabled only for Permanent situations.
+   - Validate only, no save.
+5. **Income & Benefits.**
+   - Each "<source>: Yes/No" field gates its Amount field: enabled only when Yes, and cleared when it isn't.
+   - Each insurance type's "No <type> reason" is enabled only when that type = No, using the HUD reason codes 1/2/3/4/8/9/99.
+   - The insurance type rows show only when Covered by Health Insurance = Yes.
+   - Build the gating as ONE declarative map (target field → {source field, enabling value}) consumed by a generic `GatedField` component, not 30 hand-written conditionals.
+   - Validate only.
+6. **Health & DV.** Health status fields, pregnancy with due date, DV survivor, When Occurred, and Currently Fleeing. Save & Next persists the WHOLE Entry assessment, covering steps 4–6, in one POST or PATCH.
+7. **Disabilities.**
+   - Add one record at a time: Type, Response, Indefinite and impairs.
+   - When Type = HIV/AIDS and Response = Yes, reveal Anti-retroviral, T-cell available (→ count and source), and Viral load available (→ value and source).
+   - Saved records show as a list with Remove (a delete call), plus "+ Add Another Disability".
+   - A "No known disabilities to record" checkbox shows only while the list is empty.
+   - Next requires at least one record or the checkbox. Otherwise show "Add at least one disability record, or check 'No known disabilities to record' to continue." A partially filled form is saved, then the wizard advances.
+8. **Interaction Summary.**
+   - First ask: "Would you like to add an Interaction Summary for this intake?" No finishes the intake.
+   - Yes shows: Title (default "<Program> - Intake"), Status, Meeting Notes, and Next Steps, linked to the client and the case. Save & Finish.
+
+**Phase C, finished.** Show the "Intake Complete" panel, a "View client record" link (fires `onViewClient`, then closes), and Back and Done buttons. Closing the wizard makes My Clients refetch its list.
+
+**Also in this change**, now that enrollments exist:
+- Back the My Clients "With Program / Without Program" filters with real enrollment data.
+- Add the Program status `StatusBadge` column from the design, driven by the primary enrollment's status. The status→label mapping (Enrolled / Awaiting referral / Intake started) is an open item to confirm. Don't hardcode it per row.
+
+## Spec delta: `client-intake` capability. Scenarios must cover at least:
+- Search with no match → Continue as New Client.
+- Selecting an existing client pre-fills the wizard and marks completed steps.
+- A duplicate-rule hit shows Save Anyway, which then succeeds.
+- A family row with only a first name is blocked.
+- cases/ensure called twice creates only one case.
+- A Permanent situation enables Rental Subsidy Type and any other category disables it.
+- An income amount is disabled unless its source = Yes.
+- Steps 4–6 produce exactly one Entry assessment record.
+- Disabilities Next is blocked without a record or the checkbox.
+- The HIV fields appear only for HIV/AIDS = Yes.
+- Answering No to the Interaction Summary finishes without creating one.
+- Rail steps beyond the furthest reached step are not clickable.
+- SSN never appears unmasked in search or list payloads or logs.
+
+The tasks checklist ends with an end-to-end run: create a new client with 2 family members, a new enrollment, all sections, 2 disabilities, and an interaction summary, and verify every row in the DB.
 ```
 
 ## Phase 4 — Cases
