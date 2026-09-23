@@ -1,4 +1,5 @@
 export * from './icons';
+export * from './Button';
 export * from './KpiTile';
 export * from './StatusBadge';
 export * from './FilterChipRow';

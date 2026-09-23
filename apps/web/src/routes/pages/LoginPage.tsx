@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Button } from '../../components/ui';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { login } from '../../store/slices/authSlice';
 
@@ -55,13 +56,9 @@ export function LoginPage() {
           />
         </label>
         {error ? <p className="mt-7 text-sm font-medium text-coralDeep">{error}</p> : null}
-        <button
-          type="submit"
-          disabled={status === 'loading'}
-          className="mt-9 w-full rounded-md bg-ink px-9 py-4.5 text-base font-semibold text-surface transition-colors hover:bg-inkHover disabled:opacity-60"
-        >
+        <Button type="submit" disabled={status === 'loading'} className="mt-9 w-full">
           {status === 'loading' ? 'Signing in…' : 'Sign in'}
-        </button>
+        </Button>
       </form>
     </div>
   );

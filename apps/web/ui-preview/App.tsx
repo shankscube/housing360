@@ -1,4 +1,5 @@
 import { iconPreview } from './stories/Icon.stories';
+import { buttonPreview } from './stories/Button.stories';
 import { kpiTilePreview } from './stories/KpiTile.stories';
 import { statusBadgePreview } from './stories/StatusBadge.stories';
 import { filterChipRowPreview } from './stories/FilterChipRow.stories';
@@ -9,6 +10,7 @@ import type { ComponentPreview } from './stories/types';
 
 const PREVIEWS: ComponentPreview[] = [
   iconPreview,
+  buttonPreview,
   kpiTilePreview,
   statusBadgePreview,
   filterChipRowPreview,

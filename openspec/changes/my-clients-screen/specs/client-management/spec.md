@@ -123,6 +123,14 @@ The system SHALL provide a My Clients screen displaying clients in a table (name
 - **WHEN** a user selects a different filter chip in the My Clients filter row
 - **THEN** the previously active filter chip becomes inactive and only the newly selected filter applies
 
+#### Scenario: Loading the client list uses the shared table loading state
+- **WHEN** the My Clients screen is waiting on a client list request
+- **THEN** the table renders the shared `DataTable` loading state, not a screen-specific spinner or placeholder
+
+#### Scenario: A filter matching no clients uses the shared table empty state
+- **WHEN** the active filter and search combination matches no clients
+- **THEN** the table renders the shared `DataTable` empty state with a message reflecting that the filters matched nothing, not a screen-specific empty block
+
 ### Requirement: New Intake Form With Duplicate Confirmation
 The system SHALL provide a New Intake form capturing the HUD Universal Data Elements, household assignment, and disclosure-field responses, which checks for duplicate candidates before creating a client and requires explicit user confirmation before proceeding when candidates are found.
 

@@ -1,4 +1,7 @@
-export type PageHeaderActionVariant = 'primary' | 'secondary' | 'tertiary';
+import { Button, type ButtonVariant } from '../Button';
+
+/** Alias of `ButtonVariant` — the two must never diverge. */
+export type PageHeaderActionVariant = ButtonVariant;
 
 export interface PageHeaderAction {
   key: string;
@@ -15,15 +18,6 @@ export interface PageHeaderProps {
   actions?: PageHeaderAction[];
 }
 
-const actionBaseClass =
-  'whitespace-nowrap rounded-md px-9 py-4.5 text-base font-semibold transition-colors';
-
-const ACTION_VARIANT_CLASS: Record<PageHeaderActionVariant, string> = {
-  primary: 'bg-ink text-surface hover:bg-inkHover',
-  secondary: 'bg-teal text-ink hover:bg-tealHover',
-  tertiary: 'border border-borderStrong bg-surface text-ink hover:border-ink',
-};
-
 export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-7">
@@ -34,14 +28,14 @@ export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
       {actions && actions.length > 0 ? (
         <div className="flex flex-wrap gap-4">
           {actions.map((action) => (
-            <button
+            <Button
               key={action.key}
-              type="button"
+              variant={action.variant ?? 'primary'}
+              size="md"
               onClick={action.onClick}
-              className={`${actionBaseClass} ${ACTION_VARIANT_CLASS[action.variant ?? 'primary']}`}
             >
               {action.label}
-            </button>
+            </Button>
           ))}
         </div>
       ) : null}

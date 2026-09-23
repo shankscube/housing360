@@ -44,9 +44,16 @@
 
 ## 8. Frontend — My Clients Screen
 
-- [ ] 8.1 Build the My Clients page in `apps/web/src/routes/pages/MyClientsPage.tsx`: `PageHeader` with a "New Intake" action, `FilterChipRow` wired to the slice's list filter (All/Male/Female/With Program/Without Program/With Cases/Without Cases), a search input, and a `DataTable` (Name, SSN masked to last 4, DOB, Sex, Race and Ethnicity)
-- [ ] 8.2 Add a column-visibility control (local component state only, per design.md) letting the user toggle which `DataTable` columns render — avoid the terms "Fields to Display" or any Salesforce reference in code/comments/UI copy
-- [ ] 8.3 Match the visual styling of the My Clients screen in `docs/Housing360 Portal.html`
+> Prerequisite satisfied: `shared-ui-button` was applied and archived on 2026-09-23, so the `Button` that 8.3 needs is already exported from `src/components/ui`.
+
+- [ ] 8.1 Build the My Clients page in `apps/web/src/routes/pages/MyClientsPage.tsx`: a `PageHeader` (title + subtitle, no actions) above one content card — `rounded-2xl bg-surface shadow-card overflow-hidden` — matching the bundle's My Clients layout
+- [ ] 8.2 In the card's header row, render `FilterChipRow` wired to the slice's list filter (All/Male/Female/With Program/Without Program/With Cases/Without Cases) plus a search input
+- [ ] 8.3 Add the "New Intake" button to the right of that header row as `<Button variant="secondary" size="sm">` — the bundle's teal in-card treatment, **not** a `PageHeader` action
+- [ ] 8.4 Add the bundle's caption strip between the header row and the table (`surfaceMuted` band, muted `xs` text): "Columns follow HUD Universal Data Elements. Duplicate check on name + DOB + SSN runs before any new record is created."
+- [ ] 8.5 Render the `DataTable` (Name, SSN masked to last 4, DOB, Sex, Race and Ethnicity), setting `numeric` on the SSN and DOB columns so digits align as the bundle's do, and leaving Name to the default first-column emphasis
+- [ ] 8.6 Wire `DataTable`'s own `isLoading` and `emptyMessage` props to the slice's list state — do **not** hand-roll a spinner or a "no results" block; pass a filter-aware empty message (e.g. "No clients match these filters.")
+- [ ] 8.7 Add a column-visibility control (local component state only, per design.md) letting the user toggle which `DataTable` columns render — avoid the terms "Fields to Display" or any Salesforce reference in code/comments/UI copy
+- [ ] 8.8 Compose only — confirm the screen adds no inline hex, no arbitrary Tailwind value (`bg-[#…]`, `text-[10px]`), and no local restyling of a shared component. If something screen-agnostic is missing, raise it as a `shared-ui` change rather than inlining it (see design.md)
 
 ## 9. Frontend — New Intake Form
 
@@ -59,3 +66,6 @@
 - [ ] 10.1 `npm run lint` — confirm layering and no-raw-response-methods rules pass for the new API files
 - [ ] 10.2 `npm run build` — confirm both apps and `packages/types` build with the updated `Client` type
 - [ ] 10.3 Manually verify: list response omits SSN/DOB; detail response includes them; duplicate check blocks a silent double-create and confirms-through works; a disclosure field round-trips all four states; filters combine with search; SSN renders masked in the UI
+- [ ] 10.4 Verify the list's loading and empty states render `DataTable`'s shared states (load with a slow/blocked request, and with a filter that matches nothing)
+- [ ] 10.5 Visual pass: compare the finished screen against the My Clients section of `docs/Housing360 Portal.html` — card, header row, chips, teal New Intake, caption strip, table header band, row hairlines and hover
+- [ ] 10.6 Grep `apps/web/src/routes/pages/MyClientsPage.tsx` and any new intake-form components for `#[0-9a-fA-F]{3,6}`, `[[0-9.]+(px|rem)]` and `-[#` — confirm zero matches

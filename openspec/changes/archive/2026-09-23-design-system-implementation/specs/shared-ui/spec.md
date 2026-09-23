@@ -71,6 +71,11 @@ Every shared component's entry in the isolated preview tool SHALL identify which
 - **WHEN** a developer opens the isolated preview tool
 - **THEN** every status tone, every mapped status word, and `DataTable`'s empty and loading states each have a preview entry
 
+## RENAMED Requirements
+
+- FROM: `### Requirement: StatusStepper Interface Reservation`
+- TO: `### Requirement: StatusStepper Component`
+
 ## MODIFIED Requirements
 
 ### Requirement: StatusBadge Component
