@@ -1,15 +1,8 @@
 import type { Config } from 'tailwindcss';
-import { colors, spacing, typeScale } from './src/theme/tokens';
+import { tailwindTheme } from './src/theme/tailwindTheme';
 
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
-  theme: {
-    extend: {
-      colors,
-      spacing,
-      fontFamily: typeScale.fontFamily,
-      fontSize: typeScale.fontSize,
-    },
-  },
+  theme: tailwindTheme,
   plugins: [],
 } satisfies Config;

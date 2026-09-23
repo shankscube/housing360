@@ -4,13 +4,15 @@
 
 ## How to use this document
 
-Six prompts, run in order. Each one is a single OpenSpec change: run `opsx:propose` with the prompt text as-is, review the generated proposal and spec deltas, then `opsx:apply` before moving to the next prompt. Don't start a screen's prompt before the phase before it lands; several screens share components and data that only exist once earlier phases are applied.
+Seven prompts, run in order. Each one is a single OpenSpec change: run `opsx:propose` with the prompt text as-is, review the generated proposal and spec deltas, then `opsx:apply` before moving to the next prompt. Don't start a screen's prompt before the phase before it lands; several screens share components and data that only exist once earlier phases are applied.
 
-Build order follows data dependency, not nav order. My Clients comes before Cases, Cases before Assessments and Coordinated Entry, and Home comes last, because Home is a rollup dashboard reading from all of them. Building it first would mean building it twice.
+Build order follows data dependency, not nav order, with one addition: Phase 2 (design system implementation) comes before any screen, because screens should consume already-styled components instead of styling them ad hoc. After that, My Clients comes before Cases, Cases before Assessments and Coordinated Entry, and Home comes last, because Home is a rollup dashboard reading from all of them. Building it first would mean building it twice.
 
 Two assumptions, stated so they can be overridden in Phase 0 if they're wrong: TypeScript across both apps (drop the type annotations for plain JS, everything else holds), and MySQL as the primary store behind the repository layer, read from the root `.env` (if the `.env` points at MongoDB instead, only the model layer's implementation changes; the repository interfaces described below don't).
 
 Put the design file at `docs/Housing360_Portal.html` and this document, exported, at `docs/openspec-prompts.md` before starting Phase 0, so every prompt below can point at both. Each screen prompt also carries its own field-level and behavior detail, so it doesn't depend on this project's memory once it's in the repo.
+
+Phase 2 pulls the visual tokens (colors, typography, spacing) out of that file into the shared components; every phase after that references it only for page-level composition, not for colors or spacing.
 
 **Correction (2026-09-22, after Phase 1):** Phase 0 and Phase 1 below mention a `packages/ui` workspace package for shared components — that's the historical prompt text (already executed) so it's left as-is here, but it was tried twice and reverted both times: `apps/web` is the only consumer, so shared/reusable components live at `apps/web/src/components/ui/` instead, with no separate package. See the repo's `CLAUDE.md` (Standing rules). Phase 2 onward below has been corrected to say `apps/web/src/components/ui` directly, since those prompts haven't run yet.
 
@@ -73,7 +75,34 @@ Minimal auth:
 Write the spec delta for a `shared-ui` capability and an `auth` capability. Scenarios should cover: the nav collapses and expands, an unauthenticated request to any screen route redirects to login, `KpiTile` renders correctly with both 4 and 5 tiles in a row, and `FilterChipRow` only ever has one active chip at a time. Tasks checklist ends with a Storybook or equivalent isolated preview for each shared component, so later screen work doesn't have to eyeball them inside a page.
 ```
 
-## Phase 2 — My Clients
+## Phase 2 — Design system implementation
+
+```markdown
+Propose an OpenSpec change called `design-system-implementation` that amends the existing `shared-ui` capability (from Phase 1) to bring every shared component and the layout shell to full visual parity with `docs/Housing360_Portal.html`. No new capability, no page-level screens, no route content in `apps/web` — this only touches `apps/web/src/components/ui` and the Tailwind theme.
+
+Token extraction:
+- Read colors, typography scale (font family, sizes, weights, line heights), spacing scale, border radius, shadow levels, and icon set directly from `docs/Housing360_Portal.html`.
+- Write them into the Tailwind theme file scaffolded in Phase 0 as the single source of truth. No component in `apps/web/src/components/ui` should carry an inline hex value, arbitrary Tailwind value, or magic spacing number after this change; anything not already in the theme gets added to it.
+- Where the bundle uses a value with no obvious semantic name yet (a specific gray, a specific spacing), name it for its role (for example `border-subtle`, `surface-muted`), not its raw value.
+
+Component styling, each brought to full visual fidelity against the design file:
+- Left navigation rail and top bar: exact spacing, active and selected state, icon set, collapse and expand transition.
+- `KpiTile`: exact number and label typography, spacing, and the muted sub-line treatment.
+- `StatusBadge`: fill in the real status-to-color map referenced in Phase 1 (urgent as red, warning as amber, resolved as green, informational as gray) with the bundle's exact tones, and cover every status word actually used across the four batch-1 screens, not just the four example categories.
+- `FilterChipRow`: active versus inactive chip styling, hover state.
+- `DataTable`: header styling, row hover, and whichever border or zebra treatment the bundle uses, plus an empty-state row and a loading-state row.
+- `PageHeader`: title typography and the action-button row's button styling, including the primary and secondary distinction if the bundle has one.
+- `StatusStepper` (interface reserved in Phase 1, no consumer yet): style it now even though nothing renders it in this batch. It is cheap to do while the rest of the token set is already in front of you and expensive to redo later against a stale visual memory of the bundle.
+- The login screen from Phase 1's auth scaffold: apply the new theme tokens to it. If the bundle has no login mockup, keep its current layout and reskin it with the new tokens, and flag that gap as an open item rather than inventing a login design.
+
+Verification:
+- Update the Storybook or equivalent isolated preview built at the end of Phase 1 so each component's preview can sit side by side with the matching section of `docs/Housing360_Portal.html`.
+- Tasks checklist ends with a manual visual pass confirming each component matches the bundle, and a check confirming no hardcoded hex or pixel values remain in `apps/web/src/components/ui`.
+
+Write the spec delta as an amendment to the `shared-ui` capability, not a new one: add scenarios for the `StatusBadge` color map covering every status word in use, the `DataTable` empty and loading states, and the theme file being the only source of color and spacing values in `apps/web/src/components/ui`. Do not change the `auth` capability's behavior, only its screen's styling.
+```
+
+## Phase 3 — My Clients
 
 ```markdown
 Propose an OpenSpec change called `my-clients-screen` implementing the My Clients screen end to end: list, filters, intake, and the underlying Client entity. Match the visual design in `docs/Housing360_Portal.html` (My Clients screen); this prompt specifies data and behavior, not visual styling.
@@ -100,10 +129,10 @@ Known gap to carry forward, not to silently fix: there is no automated alert tod
 Write the spec delta for a `client-management` capability. Scenarios should cover at least: the duplicate check blocks a silent double-create, a disclosure field accepts all four answer states, filters combine correctly with search, and SSN never appears in a list response payload.
 ```
 
-## Phase 3 — Cases
+## Phase 4 — Cases
 
 ```markdown
-Propose an OpenSpec change called `cases-screen` implementing the Cases screen: the Case Operations Center list and the case detail record. Match the visual design in `docs/Housing360_Portal.html` (Cases screen); this prompt specifies data and behavior, not visual styling. Depends on the `client-management` capability from Phase 2 (a case always belongs to a client).
+Propose an OpenSpec change called `cases-screen` implementing the Cases screen: the Case Operations Center list and the case detail record. Match the visual design in `docs/Housing360_Portal.html` (Cases screen); this prompt specifies data and behavior, not visual styling. Depends on the `client-management` capability from Phase 3 (a case always belongs to a client).
 
 Data model — `Case` entity:
 - Case number (generated, unique), client reference, subject (free text), status, priority, last-contact date, assigned case manager.
@@ -127,10 +156,10 @@ Frontend:
 Write the spec delta for a `case-management` capability. Scenarios should cover at least: filters combine correctly, the HUD Data checklist toggle correctly hides and shows satisfied items, and each of the 6 not-yet-built tabs renders its labeled empty state without erroring.
 ```
 
-## Phase 4 — Assessments and Coordinated Entry
+## Phase 5 — Assessments and Coordinated Entry
 
 ```markdown
-Propose an OpenSpec change called `assessments-and-coordinated-entry` implementing both the Assessments screen and the Coordinated Entry screen. Match the visual design in `docs/Housing360_Portal.html` for each; this prompt specifies data and behavior, not visual styling. Depends on `client-management` (Phase 2); Coordinated Entry produces a referral hand-off, so its "Send Referral" step should create a referral record but does not need the full Referrals module UI, which isn't in this batch.
+Propose an OpenSpec change called `assessments-and-coordinated-entry` implementing both the Assessments screen and the Coordinated Entry screen. Match the visual design in `docs/Housing360_Portal.html` for each; this prompt specifies data and behavior, not visual styling. Depends on `client-management` (Phase 3); Coordinated Entry produces a referral hand-off, so its "Send Referral" step should create a referral record but does not need the full Referrals module UI, which isn't in this batch.
 
 Data model — `Assessment` entity:
 - Client reference, program enrollment reference, HUD assessment type (`entry` | `annual` | `exit`), HUD stage, status, due date.
@@ -159,7 +188,7 @@ Frontend:
 Write the spec delta for `assessment-tracking` and `coordinated-entry` capabilities. Scenarios should cover at least: type filters and status filters both apply and combine correctly, a completed vulnerability assessment produces a score and moves the stepper forward, the prioritization list quick filters are mutually exclusive or clearly composable (decide and document which), and "Send Referral" creates a referral record without requiring the Referrals UI to exist.
 ```
 
-## Phase 5 — Home dashboard
+## Phase 6 — Home dashboard
 
 ```markdown
 Propose an OpenSpec change called `home-dashboard` implementing the Home screen. Match the visual design in `docs/Housing360_Portal.html` (Home screen); this prompt specifies data and behavior, not visual styling. This is a rollup screen: it depends on `client-management`, `case-management`, and `assessment-tracking` / `coordinated-entry` all being applied first, since every tile on it reads from those.
@@ -192,4 +221,4 @@ Write the spec delta for a `home-dashboard` capability. Scenarios should cover a
 
 This batch covers the four screens that were designed and specified: Home, My Clients, Cases, and Assessments plus Coordinated Entry. The nav shell built in Phase 1 already lists Referrals, Resource Directory, Shelter Management, Data Quality, Reports, Data Import, and Training as route stubs; none of them have real screens yet.
 
-As each of those gets designed the same way this batch did (walked live, written up, and turned into a design file), add it to this document as its own numbered phase, following the same shape: what it depends on from the phases already applied, its data model, its API, its frontend composition, and its spec delta with scenarios. Two of them already have enough discovery detail to draft a phase now if wanted before they're designed: Referrals (the full field-level detail is in the discovery doc) and Data Quality (flagged in Phase 5 as needing its own rule-engine design, separate from the placeholder read model built there).
+As each of those gets designed the same way this batch did (walked live, written up, and turned into a design file), add it to this document as its own numbered phase (the next one is Phase 7), following the same shape: what it depends on from the phases already applied, its data model, its API, its frontend composition, and its spec delta with scenarios. Two of them already have enough discovery detail to draft a phase now if wanted before they're designed: Referrals (the full field-level detail is in the discovery doc) and Data Quality (flagged in Phase 6 as needing its own rule-engine design, separate from the placeholder read model built there).

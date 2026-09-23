@@ -1,3 +1,17 @@
+/* Same self-hosted families as the app — the preview must render in the real
+   typefaces or the side-by-side comparison against the design bundle is
+   meaningless. */
+@import '@fontsource-variable/inter';
+@import '@fontsource/lora/400.css';
+@import '@fontsource/lora/600.css';
+@import '@fontsource/lora/700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-surfaceApp font-sans text-base text-ink antialiased;
+  }
+}

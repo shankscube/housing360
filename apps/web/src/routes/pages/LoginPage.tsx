@@ -25,37 +25,40 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50">
+    <div className="flex min-h-screen items-center justify-center bg-surfaceApp px-7">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-lg border border-neutral-200 bg-white p-xl"
+        className="w-full max-w-formCardWidth rounded-2xl bg-surface px-14 py-18 shadow-card"
       >
-        <h1 className="text-xl font-semibold text-neutral-900">Sign in to Housing360</h1>
-        <label className="mt-lg block text-sm font-medium text-neutral-700">
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">
+          Sign in to Housing360
+        </h1>
+        <p className="mt-2.5 text-sm text-textMuted">Case Manager Portal</p>
+        <label className="mt-9 block text-xs font-semibold uppercase tracking-wide text-textMuted">
           Email
           <input
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
-            className="mt-xs w-full rounded-md border border-neutral-300 px-md py-xs text-sm"
+            className="mt-3 w-full rounded-md border border-borderStrong bg-surface px-6 py-4 text-base text-ink outline-none transition-colors focus:border-ink"
           />
         </label>
-        <label className="mt-md block text-sm font-medium text-neutral-700">
+        <label className="mt-7 block text-xs font-semibold uppercase tracking-wide text-textMuted">
           Password
           <input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
-            className="mt-xs w-full rounded-md border border-neutral-300 px-md py-xs text-sm"
+            className="mt-3 w-full rounded-md border border-borderStrong bg-surface px-6 py-4 text-base text-ink outline-none transition-colors focus:border-ink"
           />
         </label>
-        {error ? <p className="mt-md text-sm text-danger">{error}</p> : null}
+        {error ? <p className="mt-7 text-sm font-medium text-coralDeep">{error}</p> : null}
         <button
           type="submit"
           disabled={status === 'loading'}
-          className="mt-lg w-full rounded-md bg-primary-600 px-md py-sm text-sm font-medium text-white disabled:opacity-60"
+          className="mt-9 w-full rounded-md bg-ink px-9 py-4.5 text-base font-semibold text-surface transition-colors hover:bg-inkHover disabled:opacity-60"
         >
           {status === 'loading' ? 'Signing in…' : 'Sign in'}
         </button>

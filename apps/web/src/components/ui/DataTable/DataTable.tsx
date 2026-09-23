@@ -5,6 +5,13 @@ export interface DataTableColumn<T> {
   header: string;
   /** Defaults to rendering `row[key]` when omitted. */
   cell?: (row: T) => ReactNode;
+  /** Renders with tabular figures so digits align down the column. */
+  numeric?: boolean;
+  /**
+   * Emphasized cell treatment (darker, semibold). Defaults to the first
+   * column, which is what the bundle does on every one of its tables.
+   */
+  emphasis?: boolean;
 }
 
 export interface DataTableRowAction<T> {
@@ -20,57 +27,95 @@ export interface DataTableProps<T> {
   rowKey: (row: T) => string;
   /** Icon buttons rendered inline per row for one-click actions without opening the record. */
   rowActions?: DataTableRowAction<T>[];
+  /** Renders the loading-state row instead of any data. Wins over the empty state. */
+  isLoading?: boolean;
+  /** Shown in the empty-state row when there are no rows and nothing is loading. */
+  emptyMessage?: string;
 }
+
+const cellClass = 'px-9 py-5.5 text-base';
+const stateRowClass = 'px-9 py-14 text-center text-sm text-textMuted';
 
 export function DataTable<T extends Record<string, unknown>>({
   columns,
   rows,
   rowKey,
   rowActions,
+  isLoading = false,
+  emptyMessage = 'No records found.',
 }: DataTableProps<T>) {
+  const hasRowActions = Boolean(rowActions && rowActions.length > 0);
+  const columnCount = columns.length + (hasRowActions ? 1 : 0);
+
   return (
-    <table className="w-full border-collapse text-left text-sm">
+    <table className="w-full border-collapse text-left">
       <thead>
-        <tr className="border-b border-neutral-200 text-neutral-500">
+        <tr className="bg-surfaceMuted">
           {columns.map((column) => (
-            <th key={column.key} className="px-md py-sm font-medium">
+            <th key={column.key} className={headerClass}>
               {column.header}
             </th>
           ))}
-          {rowActions && rowActions.length > 0 ? (
-            <th className="px-md py-sm font-medium">Actions</th>
-          ) : null}
+          {hasRowActions ? <th className={headerClass}>Actions</th> : null}
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => (
-          <tr key={rowKey(row)} className="border-b border-neutral-100">
-            {columns.map((column) => (
-              <td key={column.key} className="px-md py-sm text-neutral-900">
-                {column.cell ? column.cell(row) : String(row[column.key] ?? '')}
-              </td>
-            ))}
-            {rowActions && rowActions.length > 0 ? (
-              <td className="px-md py-sm">
-                <div className="flex gap-xs">
-                  {rowActions.map((action) => (
-                    <button
-                      key={action.key}
-                      type="button"
-                      aria-label={action.label}
-                      title={action.label}
-                      onClick={() => action.onClick(row)}
-                      className="rounded p-xs text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
-                    >
-                      {action.icon}
-                    </button>
-                  ))}
-                </div>
-              </td>
-            ) : null}
+        {isLoading ? (
+          <tr>
+            <td colSpan={columnCount} className={stateRowClass}>
+              Loading…
+            </td>
           </tr>
-        ))}
+        ) : rows.length === 0 ? (
+          <tr>
+            <td colSpan={columnCount} className={stateRowClass}>
+              {emptyMessage}
+            </td>
+          </tr>
+        ) : (
+          rows.map((row) => (
+            <tr key={rowKey(row)} className="border-b border-borderRow hover:bg-surfaceMuted">
+              {columns.map((column, index) => (
+                <td key={column.key} className={dataCellClass(column, index)}>
+                  {column.cell ? column.cell(row) : String(row[column.key] ?? '')}
+                </td>
+              ))}
+              {hasRowActions ? (
+                <td className={cellClass}>
+                  <div className="flex gap-2">
+                    {rowActions?.map((action) => (
+                      <button
+                        key={action.key}
+                        type="button"
+                        aria-label={action.label}
+                        title={action.label}
+                        onClick={() => action.onClick(row)}
+                        className="rounded-sm p-2 text-textMuted hover:bg-surfaceSubtle hover:text-ink"
+                      >
+                        {action.icon}
+                      </button>
+                    ))}
+                  </div>
+                </td>
+              ) : null}
+            </tr>
+          ))
+        )}
       </tbody>
     </table>
   );
+}
+
+const headerClass =
+  'whitespace-nowrap border-b border-borderRow px-9 py-4.5 text-2xs font-semibold uppercase tracking-wide text-textMuted';
+
+function dataCellClass<T>(column: DataTableColumn<T>, index: number) {
+  const emphasized = column.emphasis ?? index === 0;
+  return [
+    cellClass,
+    emphasized ? 'font-semibold text-ink' : 'text-textMuted',
+    column.numeric ? 'tabular-nums' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 }

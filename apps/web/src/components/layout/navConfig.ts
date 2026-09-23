@@ -1,8 +1,15 @@
+import type { IconName } from '../ui/icons';
+
 export interface NavItem {
   key: string;
   label: string;
   /** Present when this item (or group header) itself navigates somewhere. */
   to?: string;
+  /**
+   * The bundle draws an icon on every top-level item and none on nested
+   * items, so this is optional rather than required.
+   */
+  icon?: IconName;
   /** Real screen vs. a route stub. */
   implemented: boolean;
   /** Marks which stub badge value to render next to the label, if any. */
@@ -11,26 +18,35 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { key: 'home', label: 'Home', to: '/', implemented: true },
-  { key: 'my-clients', label: 'My Clients', to: '/clients', implemented: true },
-  { key: 'cases', label: 'Cases', to: '/cases', implemented: true },
-  { key: 'assessments', label: 'Assessments', to: '/assessments', implemented: true },
+  { key: 'home', label: 'Home', to: '/', icon: 'home', implemented: true },
+  { key: 'my-clients', label: 'My Clients', to: '/clients', icon: 'users', implemented: true },
+  { key: 'cases', label: 'Cases', to: '/cases', icon: 'cases', implemented: true },
+  {
+    key: 'assessments',
+    label: 'Assessments',
+    to: '/assessments',
+    icon: 'assess',
+    implemented: true,
+  },
   {
     key: 'coordinated-entry',
     label: 'Coordinated Entry',
     to: '/coordinated-entry',
+    icon: 'ce',
     implemented: true,
   },
   {
     key: 'resource-directory',
     label: 'Resource Directory',
     to: '/resource-directory',
+    icon: 'dir',
     implemented: false,
   },
   {
     key: 'referrals',
     label: 'Referrals',
     to: '/referrals',
+    icon: 'refer',
     implemented: false,
     badge: 'referrals',
     children: [
@@ -42,6 +58,7 @@ export const NAV_ITEMS: NavItem[] = [
     key: 'shelter-management',
     label: 'Shelter Management',
     to: '/shelter-management',
+    icon: 'shelter',
     implemented: false,
     children: [
       { key: 'shelter-beds', label: 'Beds', to: '/shelter-management/beds', implemented: false },
@@ -56,6 +73,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     key: 'insights',
     label: 'Insights',
+    icon: 'insight',
     implemented: false,
     children: [
       { key: 'insights-data-quality', label: 'Data Quality', to: '/insights/data-quality', implemented: false },
@@ -65,6 +83,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     key: 'tools',
     label: 'Tools',
+    icon: 'tools',
     implemented: false,
     children: [
       { key: 'tools-data-import', label: 'Data Import', to: '/tools/data-import', implemented: false },

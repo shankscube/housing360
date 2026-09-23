@@ -1,3 +1,30 @@
+/* Self-hosted so the app makes no external font request at runtime — the
+   design bundle self-hosts these same two families. */
+@import '@fontsource-variable/inter';
+@import '@fontsource/lora/400.css';
+@import '@fontsource/lora/600.css';
+@import '@fontsource/lora/700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+
+  body {
+    @apply bg-surfaceApp font-sans text-base text-ink antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    @apply h-2 w-2;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-sm bg-borderStrong;
+  }
+}

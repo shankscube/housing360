@@ -1,33 +1,30 @@
-import type { StatusStepperStage } from '../../src/components/ui';
+import { StatusStepper, type StatusStepperStage } from '../../src/components/ui';
 import type { ComponentPreview } from './types';
 
+/** The bundle's referral stepper: four linear stages plus a rejected branch. */
 const REFERRAL_STAGES: StatusStepperStage[] = [
-  { key: 'submitted', label: 'Submitted' },
-  { key: 'reviewed', label: 'Reviewed' },
+  { key: 'new', label: 'New' },
+  { key: 'in-review', label: 'In Review' },
+  { key: 'approved', label: 'Approved' },
   {
-    key: 'decision',
-    label: 'Decision',
-    branches: [
-      { key: 'accepted', label: 'Accepted' },
-      { key: 'declined', label: 'Declined' },
-    ],
+    key: 'enrolled',
+    label: 'Enrolled',
+    branches: [{ key: 'rejected', label: 'Rejected' }],
   },
 ];
 
+const at = (currentStageKey: string) => (
+  <StatusStepper stages={REFERRAL_STAGES} currentStageKey={currentStageKey} />
+);
+
 export const statusStepperPreview: ComponentPreview = {
-  name: 'StatusStepper (reserved)',
+  name: 'StatusStepper',
+  reference: 'Referral detail → stage stepper',
   variants: [
-    {
-      name: 'Interface reserved for the Referrals module',
-      element: (
-        <div className="rounded-md border border-dashed border-neutral-300 p-md text-sm text-neutral-500">
-          <p>
-            Not implemented yet — reserved for the Referrals module. Props interface only:{' '}
-            {REFERRAL_STAGES.length} example stages (with a branching final stage) shown here as
-            data, not rendered UI.
-          </p>
-        </div>
-      ),
-    },
+    { name: 'Stage 1 — New', element: at('new') },
+    { name: 'Stage 2 — In Review', element: at('in-review') },
+    { name: 'Stage 3 — Approved', element: at('approved') },
+    { name: 'Stage 4 — Enrolled (complete)', element: at('enrolled') },
+    { name: 'Terminal branch — Rejected', element: at('rejected') },
   ],
 };

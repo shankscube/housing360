@@ -1,6 +1,6 @@
 import path from 'path';
 import type { Config } from 'tailwindcss';
-import { colors, spacing, typeScale } from '../src/theme/tokens';
+import { tailwindTheme } from '../src/theme/tailwindTheme';
 
 // Tailwind resolves relative `content` globs against the process cwd, not
 // this file's directory — and the preview's npm script runs from the
@@ -9,13 +9,8 @@ const here = (glob: string) => path.join(__dirname, glob);
 
 export default {
   content: [here('index.html'), here('**/*.{ts,tsx}'), here('../src/**/*.{ts,tsx}')],
-  theme: {
-    extend: {
-      colors,
-      spacing,
-      fontFamily: typeScale.fontFamily,
-      fontSize: typeScale.fontSize,
-    },
-  },
+  // Shared with the app's own config — the preview never defines its own
+  // palette or scale.
+  theme: tailwindTheme,
   plugins: [],
 } satisfies Config;

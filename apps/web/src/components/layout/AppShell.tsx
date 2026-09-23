@@ -7,11 +7,11 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="flex h-screen bg-neutral-50">
+    <div className="flex h-screen overflow-hidden bg-surfaceApp text-ink">
       <NavRail collapsed={collapsed} onToggleCollapsed={() => setCollapsed((value) => !value)} />
-      <div className="flex flex-1 flex-col overflow-y-auto">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
-        <main className="flex-1">
+        <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>
