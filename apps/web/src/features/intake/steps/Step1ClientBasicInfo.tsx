@@ -396,31 +396,31 @@ const Step1ClientBasicInfo = forwardRef<StepHandle>(function Step1ClientBasicInf
         <div className="mt-7 grid grid-cols-1 gap-7 sm:grid-cols-2">
           <div className={fieldWrapClass}>
             <span className={labelClass}>SSN</span>
-            <div className="mt-2 flex gap-4">
-              <input
-                type="text"
-                value={ssnValue}
-                onChange={(event) => setSsnValue(event.target.value)}
-                disabled={ssnStatus !== 'provided'}
-                placeholder="XXX-XX-XXXX"
-                className={`${inputClass} mt-0 flex-1`}
-              />
-              <select
-                value={ssnStatus}
-                onChange={(event) => {
-                  const next = event.target.value as DisclosureStatus;
-                  setSsnStatus(next);
-                  if (next !== 'provided') setSsnValue('');
-                }}
-                className={`${inputClass} mt-0 w-56`}
-              >
-                {DISCLOSURE_STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Value input gets the field's full width; the disclosure status
+                qualifies it from underneath rather than competing for the row. */}
+            <input
+              type="text"
+              value={ssnValue}
+              onChange={(event) => setSsnValue(event.target.value)}
+              disabled={ssnStatus !== 'provided'}
+              placeholder="XXX-XX-XXXX"
+              className={inputClass}
+            />
+            <select
+              value={ssnStatus}
+              onChange={(event) => {
+                const next = event.target.value as DisclosureStatus;
+                setSsnStatus(next);
+                if (next !== 'provided') setSsnValue('');
+              }}
+              className={inputClass}
+            >
+              {DISCLOSURE_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <label className={fieldWrapClass}>
@@ -441,30 +441,28 @@ const Step1ClientBasicInfo = forwardRef<StepHandle>(function Step1ClientBasicInf
 
           <div className={fieldWrapClass}>
             <span className={labelClass}>Birthdate *</span>
-            <div className="mt-2 flex gap-4">
-              <input
-                type="date"
-                value={dobValue}
-                onChange={(event) => setDobValue(event.target.value)}
-                disabled={dobStatus !== 'provided'}
-                className={`${inputClass} mt-0 flex-1 ${fieldBorder(invalidFields, 'dobValue')}`}
-              />
-              <select
-                value={dobStatus}
-                onChange={(event) => {
-                  const next = event.target.value as DisclosureStatus;
-                  setDobStatus(next);
-                  if (next !== 'provided') setDobValue('');
-                }}
-                className={`${inputClass} mt-0 w-56`}
-              >
-                {DISCLOSURE_STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <input
+              type="date"
+              value={dobValue}
+              onChange={(event) => setDobValue(event.target.value)}
+              disabled={dobStatus !== 'provided'}
+              className={`${inputClass} ${fieldBorder(invalidFields, 'dobValue')}`}
+            />
+            <select
+              value={dobStatus}
+              onChange={(event) => {
+                const next = event.target.value as DisclosureStatus;
+                setDobStatus(next);
+                if (next !== 'provided') setDobValue('');
+              }}
+              className={inputClass}
+            >
+              {DISCLOSURE_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <label className={fieldWrapClass}>
@@ -499,7 +497,7 @@ const Step1ClientBasicInfo = forwardRef<StepHandle>(function Step1ClientBasicInf
             <select
               value={veteranStatus}
               onChange={(event) => setVeteranStatus(event.target.value)}
-              className={`${inputClass} sm:w-72`}
+              className={`${inputClass} sm:w-fieldNarrow`}
             >
               <option value="">Select…</option>
               {veteranStatusOptions.map((option) => (

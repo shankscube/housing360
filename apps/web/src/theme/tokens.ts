@@ -239,6 +239,10 @@ export const layout = {
   stepConnector: '38px',
   /** Nav rail user-card avatar. */
   avatar: '34px',
+  /** The intake wizard's step-rail column. */
+  wizardRail: '288px',
+  /** A select that shouldn't stretch the full form width (e.g. Veteran Status). */
+  fieldNarrow: '288px',
   /** The wordmark's rendered width in the bundle's rail. */
   logo: '154px',
   /** The nav rail user-card's account-menu popover (log out). */

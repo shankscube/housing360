@@ -4,7 +4,7 @@
 
 ## How to use this document
 
-Eight prompts, run in order (Phase 3b sits between Phase 3 and Phase 4). Each one is a single OpenSpec change: run `opsx:propose` with the prompt text as-is, review the generated proposal and spec deltas, then `opsx:apply` before moving to the next prompt. Don't start a screen's prompt before the phase before it lands; several screens share components and data that only exist once earlier phases are applied.
+Eleven prompts, run in order. Each screen phase from 3 onward has a "b" follow-up (3b, 4b, 5b, 6b) that completes the full workflow found in the source portal; run it right after its parent phase. Each one is a single OpenSpec change: run `opsx:propose` with the prompt text as-is, review the generated proposal and spec deltas, then `opsx:apply` before moving to the next prompt. Don't start a screen's prompt before the phase before it lands; several screens share components and data that only exist once earlier phases are applied.
 
 Build order follows data dependency, not nav order, with one addition: Phase 2 (design system implementation) comes before any screen, because screens should consume already-styled components instead of styling them ad hoc. After that, My Clients and its intake wizard (Phase 3b) come before Cases, Cases before Assessments and Coordinated Entry, and Home comes last, because Home is a rollup dashboard reading from all of them. Building it first would mean building it twice.
 
@@ -262,6 +262,83 @@ Frontend:
 Write the spec delta for a `case-management` capability. Scenarios should cover at least: filters combine correctly, the HUD Data checklist toggle correctly hides and shows satisfied items, and each of the 6 not-yet-built tabs renders its labeled empty state without erroring.
 ```
 
+## Phase 4b — Case workspace (full)
+
+```markdown
+Propose an OpenSpec change called `case-workspace` that completes the Cases module: New Case, the full case detail header and Edit, and real content for every detail tab that `cases-screen` left as a labeled empty state. Match the visual design in `docs/Housing360 Portal.html`. Shared components go in `apps/web/src/components/ui` (see CLAUDE.md standing rules). Depends on `client-management`, `client-intake` (Phase 3b: households, programs, program_enrollments, cases, assessments, disabilities, interaction_summaries) and `case-management` (Phase 4). EXTEND those tables; do not recreate them. This change is large: group the tasks checklist by tab so it can be applied and verified tab by tab.
+
+## Data model additions
+- `cases` additions: case_number (generated, unique), subject, description, status, priority, stage, origin, case_manager_id, referral_id, program_enrollment_id, opened_date, closed_at, next_hmis_review_due, hmis_data_quality_status, follow_up_milestone (none | 30 | 60 | 90 day) and follow_up_due_date (computed from opened_date or last contact when a milestone is set).
+- `tasks` (one table for every task in the app): subject, description, status, priority, subtype, due_date, owner_id, client_id, and nullable links case_id, goal_assignment_id, interaction_summary_id. Home, Tasks, and Client 360 all read this table later.
+- `interaction_summaries` additions: interaction_purpose, confidentiality_type, partner_account, offering, related_record (polymorphic: type and id).
+- Care plans: `care_plan_templates` (name, description, is_published, template goals with default tasks), `care_plans` (case_id, client_id, name, description, status Proposed | Draft | Active | Completed | Cancelled, start_date, end_date, template_id), `goal_definitions` (catalog of suggested goals with a service domain), `goal_assignments` (care_plan_id, goal_definition_id nullable, name, description, priority High | Medium | Low, status Not Started | In Progress | Completed | Canceled, service_domain), goal tasks live in `tasks` via goal_assignment_id.
+- Services: `benefits` (program_id, name, service_domain), `benefit_assignments` (program_enrollment_id, benefit_id, status), `service_disbursements` (benefit_assignment_id, recipient_client_id, disbursement_type, status, disbursement_date, description, trigger_reason, voucher_number, voucher_amount, bed_identifier, shift).
+- Beds (minimal, the Shelter Management module will extend these later): `beds` (program_id, identifier, is_active), `bed_assignments` (program_enrollment_id, bed_id, start_date, end_date), `bed_nights` (bed_assignment_id, log_date, shift Day | Overnight, status Present | Absent).
+- Referrals (create only if an earlier phase has not): `referrals` (title, client_id, case_id, program_id, provider_org_id, referrer_org_id, referral_date, type, status, priority, category, outcome, description, comments, client_contact, provider_contact, referrer_contact, case_manager_comments, decline_reason, decline_notes, is_external).
+- Partner agencies: `organizations` (name, address, contact_email, is_partner) and `organization_service_domains` (which service domains an agency provides).
+- Release of Information: `releases_of_information` (client_id, recipient organization and contact details, info types released: case management, day-to-day activity, mental health, chemical dependency, HIV/AIDS, other; purpose, client signature, client signed_at, staff signature, staff signed_at, expires_on defaulting to signed_at + 365 days, revoked_at). A client has active consent when an unrevoked, unexpired ROI exists.
+- Clinical read model for Health & Wellness: `clinical_summaries` and `clinical_encounters` (encounter number, date, type, location, provider, status), filled by an EHR adapter.
+
+## API (all through the common responder and logger)
+- `GET /api/cases/dashboard`: KPI tiles (active, high risk, due today, closed this month, plus active-cases trend vs last month) and the paginated list. Search matches client name, case number, program, or case manager.
+- `POST /api/cases`, `GET /api/cases/:id`, `PATCH /api/cases/:id`, `PATCH /api/cases/:id/follow-up {milestone}`.
+- `GET /api/cases/:id/tasks`, `POST /api/tasks`, `PATCH /api/tasks/:id`.
+- `GET /api/cases/:id/interaction-summaries?search=`, `POST /api/interaction-summaries` (accepts an optional task block: create_task, task_title, task_due_date, task_assigned_to, use_next_steps_as_description), `PATCH /api/interaction-summaries/:id`, `GET /api/interaction-summaries/:id` (with its tasks).
+- Care plans: `GET /api/cases/:id/care-plans` (with progress: tasks done / total), `GET /api/care-plan-templates?published=true&search=`, `GET /api/cases/:id/recommended-care-plan-templates`, `POST /api/care-plans` (plan plus goals plus tasks in one transaction), `GET/PATCH /api/care-plans/:id`, `POST /api/care-plans/:id/goals`, `GET/PATCH /api/goal-assignments/:id`, `POST /api/goal-assignments/:id/tasks`, `PATCH /api/tasks/:id/status`.
+- Service gaps and partner referral: `GET /api/cases/:id/service-gaps` (goal service domains no in-house benefit covers), `GET /api/partner-agencies?domain=`, `GET /api/clients/:id/roi-status`, `POST /api/referrals/external`.
+- Services: `GET /api/clients/:id/enrollments`, `GET /api/enrollments/:id/services`, `GET /api/enrollments/:id/assignable-benefits`, `POST /api/enrollments/:id/services`, `GET/POST /api/benefit-assignments/:id/disbursements`, `PATCH /api/disbursements/:id`.
+- Beds: `GET /api/programs/:id/beds/available?date=&shift=`, `POST /api/bed-assignments` (also logs today's night as Present), `GET /api/bed-assignments/:id/nights`, `POST /api/bed-nights`, `PATCH /api/bed-nights/:id`.
+- Referrals tab: `GET /api/cases/:id/referrals`, `POST /api/referrals`, `PATCH /api/referrals/:id`, `POST /api/referrals/:id/accept`, `POST /api/referrals/:id/decline {reason, notes}`.
+- ROI: `POST /api/releases-of-information`.
+- Health & Wellness: `GET /api/clients/:id/health-wellness`.
+
+## Frontend: `apps/web/src/features/cases/`
+**Case Operations Center.** Reuse the Phase 4 page. Add the "New Case" modal: Subject*, Description, Client (search field), Case Manager, Referral, Opened Date, Status, Priority, Origin, Escalated, Contact. Toasts "Case created successfully." and "Unable to create the case. Please check the required fields." The Active Cases tile shows the trend line ("▲/▼ N% vs last month").
+
+**Case detail header.** Title "<Subject> — <Client>", "Case <number>", then Client (link to client), Status, Referral, Priority, Stage, Origin, and an Edit button opening an edit form (Subject, Status, Priority, Stage, Origin, HMIS Data Quality Status, Next HMIS Review Due, Case Manager, Description). Back returns to the list with filters preserved. Tabs: Overview, Plan, Services, Assessments, Referrals, HUD Data, Health & Wellness.
+
+**Overview tab.**
+- Left: Interaction Summaries card with search, New, a list, and a "Don't forget!" nudge when there are none. New and Edit use one form: Title, Status, Interaction Purpose, Confidentiality Type, Meeting Notes, Next Steps, Partner Account, plus an optional "Create a Task" block (Title, Due Date, Assigned To, "Use Next Steps as the task description"). Opening one shows the Interaction Summary detail (Information, More Details, and an Upcoming & Overdue activity list with New Task).
+- Right: Details (Client & Program: client, program, enrollment, referral, case manager, description, closed, next HMIS review due, HMIS data quality status), a Follow-Up Reminder control (No follow-up, 30 Day, 60 Day, 90 Day, Set Reminder) that writes follow_up_milestone and follow_up_due_date, a Tasks card with New Task (Subject*, Status, Priority, Due Date, Description; "Please enter a subject for the task." when blank), and System Information (created/modified by and on).
+
+**Plan tab.**
+- List care plans for the case with status, start, target, tasks done, and description. Each expands to its goals; each goal expands to its tasks with inline status change and New Task.
+- "New Care Plan" and "New from Template" open a 3-step Care Plan wizard: Plan details (template picker with "Recommended for this client" first, then published templates with search; Name, Description, Status, Start, End) → Goals (type a goal or pick a suggested goal definition, priority; "Give every goal a name, or remove the empty one, to continue.") → Tasks under each goal (subject, due date; "Give every task a subject, or remove the empty one, to continue."; a goal with no tasks is fine). The same wizard edits an existing plan, adds goals, or edits one goal.
+- Service gaps: when a goal's service domain has no in-house benefit, show "<domain> isn't offered in-house." with "Refer to Partner". That opens Refer to Partner Agency: pick an agency offering the domain (flag agencies with no contact email as "can't be reached yet"), then the ROI check. With active consent, show what the client authorized. Without it, offer "Create Release of Information" or "Continue Without ROI" behind the confirmation checkbox "I understand this referral will be sent without any client details beyond initials." Optional notes, then Send Referral. Without consent only the client's initials are stored on the external referral.
+
+**Services tab.**
+- Program Enrollments list (searchable, Primary badge, status, start, end). Expanding one shows its assigned services and each service's disbursements.
+- "Assign Service" picks from the benefits configured for that enrollment's program ("No benefits are configured for this program yet." when empty).
+- "New Disbursement" and edit: type, status, date, recipient, description, trigger reason, voucher number and amount, and bed identifier and shift where relevant.
+- "Assign Bed": program, date, shift (Day or Overnight), Find Available Beds, pick one; success toast "The bed was assigned and today's stay was logged."
+- Daily Log sub-view per bed assignment: a calendar of nights marked Present, Absent, or Not logged, one-click logging, and Recent Daily Logs (date, status, shift).
+
+**Assessments tab.** Enrollment picker, then the assessments on that enrollment (stage, date, status, score) with Resume Draft and Discard on drafts, and a "Recommended Care Plans" strip with "Create from Template" that opens the Care Plan wizard pre-filled. The assessment form and scoring arrive in Phase 5b; until then Resume and New route to a placeholder, not a broken link.
+
+**Referrals tab.** Referrals for the case (category, outcome, client, provider, and referrer contacts, case manager comments), New Referral (the shared modal: Title*, Client*, Program, Provider, Referrer, Referral Date, Type, Status, Priority, Category, Description, Comments), Edit, Accept, and Decline with Reason (default "Client declined services") and optional Notes.
+
+**HUD Data tab.** Keep the Phase 4 checklist. Add the "✓ All clear" state, the empty-filter message ("Nothing matches the current filter; toggle Show satisfied items to see the full checklist."), and the no-rules state. Keep the disclosure line config-driven as Phase 4 specified.
+
+**Health & Wellness tab.** Clinical Summary (last clinical visit, next scheduled appointment, open follow-ups), Release of Information status with a "Create Release of Information" action, and Recent Visits (encounter number, date, type, location, provider, status). Define an `EhrAdapter` interface with a no-op implementation so the tab shows "No clinical data on file for this client yet." Do not name the vendor in UI copy.
+
+**ROI form (shared component).** "Authorization to Release and Receive Confidential Information": client legal name and DOB (pre-filled), recipient organization and contact details, yes/no per information type, purpose, the authorization text, client and staff signature pads with Clear and date, the 42 CFR Part 2 re-disclosure notice, and the expiry date (default 365 days). Put the legal text in one config file, not inline in the component, so compliance can change it.
+
+Redux: extend the `cases` slice with a `caseDetail` sub-state; add `carePlans`, `services`, and `referrals` slices. Every thunk goes through the API client layer.
+
+## Spec delta: amend `case-management`, add `care-planning`, `case-services`, `release-of-information`. Scenarios must cover at least:
+- New Case without Subject is rejected; with it, the case appears in the list with a generated case number.
+- Setting a 60 Day follow-up stores the milestone and a due date 60 days out; "No follow-up" clears both.
+- An interaction summary with "Create a Task" and "Use Next Steps" checked creates one task whose description equals Next Steps.
+- The care plan wizard blocks an unnamed goal and an unnamed task, and saves plan, goals, and tasks in one transaction.
+- A goal whose domain has no in-house benefit shows Refer to Partner; without active ROI the referral stores initials only.
+- An ROI expires 365 days after signing when no date is given, and an expired ROI is not active consent.
+- Assigning a bed logs today's night as Present; a bed already assigned for that date and shift is not offered.
+- Declining a referral stores reason and notes and sets its status to declined.
+- Every tab renders an empty state, not an error, for a case with no related data.
+
+The tasks checklist ends with an end-to-end run on one case: create it, set a follow-up, log an interaction summary with a task, build a care plan from a template, assign a service, log a disbursement, assign a bed and mark two nights, add and decline a referral, and sign an ROI.
+```
+
 ## Phase 5 — Assessments and Coordinated Entry
 
 ```markdown
@@ -294,6 +371,88 @@ Frontend:
 Write the spec delta for `assessment-tracking` and `coordinated-entry` capabilities. Scenarios should cover at least: type filters and status filters both apply and combine correctly, a completed vulnerability assessment produces a score and moves the stepper forward, the prioritization list quick filters are mutually exclusive or clearly composable (decide and document which), and "Send Referral" creates a referral record without requiring the Referrals UI to exist.
 ```
 
+## Phase 5b — Assessment workspace and Coordinated Entry engine (full)
+
+```markdown
+Propose an OpenSpec change called `assessment-and-ce-workspace` that completes the Assessments and Coordinated Entry modules and replaces the placeholder scoring from `assessments-and-coordinated-entry` (Phase 5) with the real, configurable models. Match the visual design in `docs/Housing360 Portal.html`. Shared components go in `apps/web/src/components/ui`. Depends on `client-intake` (3b), `case-workspace` (4b), and `assessment-tracking` / `coordinated-entry` (5). EXTEND the existing `assessments`, `disabilities`, `referrals`, `beds`, and `care_plan_templates` tables. REUSE the living situation, income and benefits, health and DV, and disabilities section components built for the 3b intake wizard; do not build a second copy.
+
+## Part 1: HUD assessments
+
+**Data model additions.**
+- `assessments` additions: status Draft | Complete, due_date, assessor_id, legacy_sync_status (Not Synced | Pending | Synced | Failed) and legacy_sync_date. Stage uses HUD data collection stage codes: 1 project start (Entry), 2 update, 3 project exit, 5 annual.
+- `program_exits` (program_enrollment_id, assessment_id, exit_date, destination_type, destination, case_manager_exit_reason). Recording an exit sets the enrollment's end date and status.
+- `assessment_score_contributions` (assessment_id, field, value, contribution) written by the scoring service.
+
+**Stage eligibility, in one `AssessmentEligibilityService`.** Given an enrollment it returns every stage with `allowed` and a `reason`:
+- Entry: allowed only when the enrollment has no Entry assessment.
+- Update: allowed any time after Entry and before Exit.
+- Annual: allowed only inside the HUD annual window, 30 days before to 30 days after each anniversary of the enrollment start date, and only once per window.
+- Exit: allowed once, while the enrollment is active.
+- Any stage with an unfinished Draft returns that draft so the UI can offer "Resume Draft" instead of a new one.
+The source system computes this server-side and the exact rules were not visible, so implement the HUD-standard rules above, keep them in this one service, and list "confirm eligibility rules against the source org" as an open item.
+
+**Scoring, in one `HousingStabilityScoringService`.** Score = sum of rule contributions. Keep rules in a `scoring_rules` table (field, match value or range, contribution points) and seed a clearly marked provisional rule set. It returns `{ score, label, contributions[] }` and persists contributions. Care-plan recommendations come from a `care_plan_template_rules` table (score band or field condition → template). The real weights are an open item for the program team; the engine, contribution breakdown, and recommendation wiring are not.
+
+**API.**
+- `GET /api/assessments/dashboard`: KPI tiles (Due Today, In Progress = drafts, Completed this month, Total across programs) and the paginated, filterable list (status: All, Overdue, Due Today, In Progress, Completed; type: Entry, Annual, Exit; search).
+- `GET /api/enrollments/:id/assessment-eligibility`, `GET /api/enrollments/:id/assessments`, `GET /api/enrollments/:id/latest-assessment-values` (for carry forward), `GET /api/enrollments/:id/summary`.
+- `POST /api/assessments` (Draft or Complete), `PATCH /api/assessments/:id`, `DELETE /api/assessments/:id` (drafts only; a completed assessment returns 409), `GET /api/assessments/:id` (with score, contributions, disabilities).
+- `PUT /api/assessments/:id/disabilities` (replace the full set in one call).
+- `POST /api/enrollments/:id/exit` (called by an Exit assessment on completion).
+- `GET /api/enrollments/:id/recommended-care-plan-templates`.
+
+**Frontend: `apps/web/src/features/assessments/`.**
+- Assessment Command Center (extend Phase 5): "Launch Assessment" button, KPI sub-lines ("Requires immediate completion", "Drafts awaiting completion", "Completed this month", "Across all programs"), and Resume and Discard in the Actions column for drafts (Discard asks for confirmation through the shared confirm dialog, never a browser `confirm`).
+- Launch Assessment modal, three numbered steps: 1. Client (search field), 2. Program Enrollment ("This client has no program enrollments yet. Create one before recording an assessment." when none), 3. Assessment Type showing only allowed stages. If a draft exists, show "An unfinished <stage> assessment already exists on this enrollment — resume it to continue." with "Resume Draft ›". When nothing is allowed, show "No assessment type is available to record on this enrollment right now." Continue opens the form.
+- Assessment form modal: stage (disabled options show their reason), Assessment Date, a "Carry forward previous answers" action that pre-fills from the latest assessment on the enrollment, the reused section components, disabilities (add and remove rows, saved as a set), and for Exit an Exit Details section (Destination Type → Destination dependent select using the same HUD situation code map, plus case manager exit reason). Footer: Discard Draft, ‹ Back, Cancel, Save Draft, and Complete. Completing runs scoring, sets legacy_sync_status to Pending, and for Exit records the program exit.
+- Assessment detail page: Assessment Overview (status, stage, date, due date), Client & Enrollment (client, enrollment, assessor), the score with "Show what contributed to this score" expanding a Field | Value | Contribution table, disabilities with their HIV fields when present, and System Information. Resume Draft and Discard for drafts.
+- Wire the same form and detail into the Case → Assessments tab that 4b left as a placeholder, including "Create from Template" on recommended care plans.
+
+## Part 2: Coordinated Entry
+
+**Configurable rule model.** Replace the Phase 5 placeholder with tables:
+- `ce_questions` (text, client_facing_prompt, sequence, is_active, weight_note for documentation only) and `ce_answer_options` (question_id, text, score).
+- `ce_score_bands` (name, min_score, max_score, description, badge_color, recommended_project_type_codes).
+- `ce_flag_overrides` (flag Veteran | Unaccompanied Youth | Safety Alert, optional trigger_question_id and trigger_min_score, behavior add | replace, external_referral_message).
+- `ce_rule_changes` (audit: who changed which rule, when, before and after).
+- `ce_assessments` (client_id, assessor_id, assessed_at, total_score, band_id, flags) and `ce_responses` (ce_assessment_id, question_id, answer_option_id, score).
+Seed 5 active questions with answer options, 3 score bands, and one override per flag, all marked as demo configuration.
+
+**Engine, in one `CoordinatedEntryService`.** Score = sum of chosen answer scores. The band whose range contains the score sets priority and the base recommended project types. Each flag override that matches (flag set, and trigger condition met when present) adds to or replaces the recommendation and is shown as "override applied". A Safety Alert sets "Referral Suppressed" and surfaces the override's external referral message in place of normal referral actions.
+
+**API.**
+- `GET /api/ce/questions` (active, ordered), `POST /api/ce/assessments`, `GET /api/ce/assessments/:id` (details, flags, responses, previous assessments for the client).
+- `GET /api/ce/priority-queue?filter=TOP5|VETERAN|YOUTH|SAFETY_ALERT|AWAITING_REFERRAL&search=&page=`.
+- `GET /api/ce/clients/:id/recommendation`: band, base project types, applied overrides, suppression state.
+- `GET /api/ce/recommended-programs?projectType=`: programs with partner agency, address, and live bed availability from the 4b `beds` tables.
+- `POST /api/referrals` (from CE, with the referrer's default organization and the provider case manager resolved).
+- Rule admin API, behind a `ce:manage-rules` permission check: CRUD for questions, answer options, score bands, and flag overrides, each writing a `ce_rule_changes` row, plus `GET /api/ce/rule-changes`. The editor UI belongs to the later Admin Panel phase; build the API and permission check now.
+
+**Frontend: `apps/web/src/features/coordinated-entry/`.**
+- Page header "Coordinated Entry" with "View All Clients" and "Vulnerability Assessment" buttons.
+- Vulnerability Assessment modal: client search, intake flags (Veteran, Unaccompanied Youth, "Safety Alert (fleeing domestic violence or other safety concern)"), the active questions rendered in sequence from config, Save Assessment. Nothing about questions or scores is hardcoded in the component.
+- Coordinated Entry Workflow stepper: Vulnerability Assessment → Recommended Program Types → Partner Agencies → Send Referral, with Back links between steps.
+  - Recommendation card: "Coordinated Entry Recommendation — score-based routing per the Coordinated Entry scoring model", the band badge, override markers, and the suppression banner "Safety Alert — Referral Suppressed" with the external message.
+  - Recommended Program Types: click one to see partner programs; "No project types currently have eligible programs." when empty.
+  - Partner Agencies: Program, Address, Beds (live), Action.
+  - Send Referral review panel: Client, Program, Organization, Priority, Referral Date, Status New, Referral Type, Category, Referrer Case Manager, Provider Case Manager, Description, Comments ("Add any comments for the receiving program..."). Toast "Referral sent" and refresh the queue row's Referral Status.
+- Prioritization List: Name, DOB, SSN (masked), Intake Flags (badges), Score, Priority, Assessed, Referral Status; quick filters Top 5 High Priority, Veterans, Unaccompanied Youth, Safety Alerts, Awaiting Referral (single-select); search; pagination. A row opens the CE assessment detail (details, flags or "No flags on record", responses, previous assessments, View Client).
+
+## Spec delta: amend `assessment-tracking` and `coordinated-entry`. Scenarios must cover at least:
+- An enrollment with an Entry assessment offers no second Entry; Annual is allowed only inside the ±30-day anniversary window.
+- An existing draft forces Resume instead of a new assessment of that stage; discarding a completed assessment is rejected.
+- Carry forward pre-fills from the most recent assessment on the same enrollment only.
+- Completing an Exit assessment records the program exit and closes the enrollment.
+- The score equals the sum of persisted contributions, and the breakdown lists every contributing field.
+- A CE score of exactly a band's min or max lands in that band.
+- A "replace" override replaces the base recommendation; an "add" override appends to it.
+- A Safety Alert client never shows Send Referral, and the external message is shown.
+- Editing a question or band without `ce:manage-rules` returns 403, and every allowed edit writes an audit row.
+- Priority queue filters are single-select and combine with search.
+
+The tasks checklist ends with two end-to-end runs: (1) launch an Annual assessment inside its window, carry forward, complete it, and check the score breakdown; (2) run a vulnerability assessment for a veteran, follow the recommendation to a program with an open bed, send the referral, and see it in the queue as sent.
+```
+
 ## Phase 6 — Home dashboard
 
 ```markdown
@@ -321,6 +480,58 @@ Frontend:
 - Compose the page from `KpiTile`, `PageHeader`, and a generic list-card component (build a `ListCard` in `apps/web/src/components/ui` if one doesn't already exist from Today's Tasks and Data Quality Alerts sharing the same visual pattern of a titled card containing a list of rows).
 
 Write the spec delta for a `home-dashboard` capability. Scenarios should cover at least: the aggregate endpoint returns correctly even when a case manager has zero of something (empty states, not errors), the Data Quality Alerts panel is clearly marked as provisional data in a code comment and in the proposal, and the four KPI tiles' numbers match what `client-management`, `assessment-tracking`, and `coordinated-entry` actually report.
+```
+
+## Phase 6b — Home workspace (full)
+
+```markdown
+Propose an OpenSpec change called `home-workspace` that completes the Home screen and the pages it links to. It replaces the stubs `home-dashboard` (Phase 6) left in place: the stubbed top bar, the "not yet specified" Today's Appointments and Recently Accessed slots, and the derived task list. Match the visual design in `docs/Housing360 Portal.html`. Shared components go in `apps/web/src/components/ui`. Depends on `client-intake` (3b), `case-workspace` (4b), `assessment-and-ce-workspace` (5b), and `home-dashboard` (6). Read from the existing tables; add only what is listed below.
+
+## Data model additions
+- `referral_status_events` (referral_id, from_status, to_status, changed_by, changed_at, seen_by_referrer_at). Write one row on every referral status change from 4b and 5b.
+- `record_activity` (user_id, record_type client | case | referral | assessment, record_id, action viewed | modified, at). Write it from the services, not the controllers, so every module feeds it the same way.
+- No appointments table: "appointments" in the source system are case follow-up milestones (4b's follow_up_milestone and follow_up_due_date).
+
+## API (all through the common responder and logger)
+- `GET /api/search?q=`: at most 5 hits per group across Clients, Cases, Referrals, Tasks, and Assessments, each with type, id, title, subtitle, and icon key. Minimum 2 characters. Only records the user can see. Masked SSN only, and never search by SSN in the free-text box.
+- `GET /api/notifications`: `pendingReferrals` (referrals routed to the user's organization or programs with status new: title, client, program) and `statusUpdates` (status events on referrals the user sent that they have not seen: title, status label). Plus `POST /api/notifications/status-updates/seen`.
+- `GET /api/dashboard/home` (extend Phase 6): real Active Caseload, Open Referrals, Tasks Due Today, and Assessments Due tiles with sub-lines; today's tasks from `tasks` (owner = me, open, due today or overdue, with overdue flag, priority, and client); open data quality alerts (participant, days open, related record type and id); today's appointments (cases I manage with follow_up_due_date = today: case number, client, milestone); the 5 most recent `record_activity` items.
+- `GET /api/appointments?from=&to=`: follow-up milestones in a date range, for the Calendar page.
+- `GET /api/tasks?filter=all|due_today|overdue|upcoming&search=&page=`, `GET /api/tasks/:id`, `PATCH /api/tasks/:id`.
+- `GET /api/recent-activity?type=all|cases|referrals|clients|assessments&page=`.
+
+## Frontend
+**Top bar (shared shell, replacing the Phase 1 stubs).**
+- Global search: debounced input "Search clients, cases, referrals...", a dropdown grouped by type with icon, title, and subtitle, "Searching…" and "No matches found." states, keyboard navigation, and click-through to the record. Close on blur and on Escape.
+- Notifications bell: badge with the total count. The panel has two sections, New Referrals (title, client, program) and Referral Updates (title, status label), and "No new notifications right now." when both are empty. Clicking an item opens the referral and marks status updates seen.
+
+**Home page (extend Phase 6).**
+- Welcome band with first name and today's date.
+- Quick actions: New Intake (the 3b `IntakeWizard`), New Referral (the shared New Referral modal from 4b), New Case (the 4b modal). Each refreshes the dashboard on close.
+- KPI tiles are clickable: Active Caseload → Cases filtered to My Caseload; Open Referrals → the Referrals route (a stub until the Referrals phase); Tasks Due Today → Tasks page with Due Today; Assessments Due → Assessments with Due Today.
+- Today's Tasks: subject, priority, due date, client, and an "Overdue" badge; "No open tasks assigned to you." when empty; a row opens the Task detail.
+- Data Quality Alerts: a dot colored by severity, title, participant, and days open; "No open data quality issues." when empty; a row opens the related record.
+- Today's Appointments: case number, client, and milestone ("30 Day follow-up"); "No follow-ups scheduled for today." when empty; a row opens the case. A "Calendar" link opens the Calendar page.
+- Recently Accessed: the 5 newest items with a type icon; "Nothing updated in your caseload yet." when empty; "View All" opens the Recently Modified page.
+
+**Tasks page (`/tasks`, reached from Home).** "Tasks — Click a task to open the activity." Filter chips All Tasks, Due Today, Overdue, Upcoming; search by subject or owner; columns Priority, Subject, Owner, Status, Due Date; pagination; "No tasks found." A row opens Task detail: Subject, Status, Priority, Task Subtype, Due Date, Owner, Client, Created, Last Modified, Description, with Edit, Cancel, and Save.
+
+**Calendar page (`/calendar`).** Month grid with previous and next month, weekday labels, a marker on days that have follow-ups, and clicking a day lists that day's follow-ups (case number, client, milestone) below the grid; "No follow-ups scheduled for this day." A follow-up opens its case.
+
+**Recently Modified page (`/recent`).** "Cases, referrals, clients, and assessments from your own caseload, newest first." Filter tabs All, Cases, Referrals, Clients, Assessments; Refresh; pagination ("‹ Prev", "Next ›"); "Nothing found for this filter."
+
+Redux: add `search`, `notifications`, `tasks`, `calendar`, and `recentActivity` slices; extend `dashboard`. All thunks go through the API client layer.
+
+## Spec delta: amend `home-dashboard`; add `global-search`, `notifications`, `task-management`, `activity-feed`. Scenarios must cover at least:
+- Search under 2 characters makes no request; results never include records outside the user's caseload or an unmasked SSN.
+- A referral status change creates a status event, shows in the referrer's Referral Updates, and disappears after being marked seen.
+- Setting a case's 30 Day follow-up makes it appear in Today's Appointments on its due date and on that Calendar day.
+- Today's Tasks shows overdue tasks with the Overdue badge and excludes completed tasks.
+- Each KPI tile navigates to its list with the matching filter already applied.
+- Viewing or editing a client, case, referral, or assessment adds it to Recently Accessed exactly once, at the top.
+- Every Home panel renders its empty state for a brand-new user.
+
+The tasks checklist ends with an end-to-end run as a new case manager: see all empty states, create an intake, a case with a 30 Day follow-up, a task due today, and a referral; then check each Home panel, the Calendar, the Tasks page, search, and the notification bell reflect them.
 ```
 
 ## What's next

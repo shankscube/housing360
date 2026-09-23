@@ -121,7 +121,7 @@ export function IntakeWizard({ onClose, onViewClient }: IntakeWizardProps) {
             </div>
           ) : (
             <div className="flex flex-1 overflow-hidden">
-              <div className="w-72 shrink-0 overflow-y-auto border-r border-borderSubtle bg-surfaceMuted p-7">
+              <div className="w-wizardRail shrink-0 overflow-y-auto border-r border-borderSubtle bg-surfaceMuted p-7">
                 <StepRail
                   steps={WIZARD_STEPS.map(({ key, label, icon }) => ({ key, label, icon }))}
                   currentStep={stepIndex}
