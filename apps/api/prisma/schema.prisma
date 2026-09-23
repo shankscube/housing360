@@ -23,6 +23,8 @@ model User {
   firstName    String
   lastName     String
   createdAt    DateTime @default(now())
+
+  assignedCases Case[]
 }
 
 enum Sex {
@@ -158,15 +160,28 @@ model ProgramEnrollment {
   @@index([programId])
 }
 
-// Minimal case — created idempotently per (client, enrollment) via
-// `POST /api/cases/ensure`'s upsert against the compound unique key below.
+// Created idempotently per (client, enrollment) via `POST /api/cases/ensure`'s
+// upsert against the compound unique key below — that contract is unchanged
+// by the `cases-screen` change. `caseNumber`/`subject`/`priority`/
+// `lastContactDate`/`assignedCaseManagerId` are case-manager-facing fields
+// added by `cases-screen` for the Case Operations Center; `status` already
+// existed (defaulted `"open"` by `ensureCase`) and is reused rather than
+// duplicated — see that change's design.md.
 model Case {
   id                  String            @id @default(uuid())
+  caseNumber          String            @unique
   clientId            String
   client              Client            @relation(fields: [clientId], references: [id])
   programEnrollmentId String
   programEnrollment   ProgramEnrollment @relation(fields: [programEnrollmentId], references: [id])
+  subject             String?
   status              String            @default("open")
+  // HUD-coded-scalar convention: plain String, not a Prisma enum — see
+  // `@housing360/types`'s `CasePriority` for the recognized values.
+  priority               String?
+  lastContactDate        DateTime?
+  assignedCaseManagerId  Int?
+  assignedCaseManager    User?    @relation(fields: [assignedCaseManagerId], references: [id])
 
   assessments          Assessment[]
   interactionSummaries InteractionSummary[]
@@ -175,6 +190,7 @@ model Case {
   updatedAt DateTime @updatedAt
 
   @@unique([clientId, programEnrollmentId])
+  @@index([assignedCaseManagerId])
 }
 
 // Entry-stage (dataCollectionStage = 1) HUD assessment. One row per

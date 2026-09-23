@@ -12,3 +12,4 @@ export * from './GatedField';
 export * from './DualListbox';
 export * from './StepRail';
 export * from './Toast';
+export * from './Tabs';

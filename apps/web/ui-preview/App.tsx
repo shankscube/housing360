@@ -9,6 +9,7 @@ import { statusStepperPreview } from './stories/StatusStepper.stories';
 import { gatedFieldPreview } from './stories/GatedField.stories';
 import { dualListboxPreview } from './stories/DualListbox.stories';
 import { stepRailPreview } from './stories/StepRail.stories';
+import { tabsPreview } from './stories/Tabs.stories';
 import type { ComponentPreview } from './stories/types';
 
 const PREVIEWS: ComponentPreview[] = [
@@ -23,6 +24,7 @@ const PREVIEWS: ComponentPreview[] = [
   gatedFieldPreview,
   dualListboxPreview,
   stepRailPreview,
+  tabsPreview,
 ];
 
 /**

@@ -5,6 +5,7 @@ import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { MyClientsPage } from './pages/MyClientsPage';
 import { CasesPage } from './pages/CasesPage';
+import { CaseDetailPage } from './pages/CaseDetailPage';
 import { AssessmentsPage } from './pages/AssessmentsPage';
 import { CoordinatedEntryPage } from './pages/CoordinatedEntryPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
@@ -18,6 +19,7 @@ export function AppRoutes() {
           <Route path="/" element={<HomePage />} />
           <Route path="/clients" element={<MyClientsPage />} />
           <Route path="/cases" element={<CasesPage />} />
+          <Route path="/cases/:id" element={<CaseDetailPage />} />
           <Route path="/assessments" element={<AssessmentsPage />} />
           <Route path="/coordinated-entry" element={<CoordinatedEntryPage />} />
 
