@@ -69,3 +69,44 @@ export function updateTask(id: string, data: TaskUpdateData): Promise<TaskRow> {
 export function updateTaskStatus(id: string, status: string): Promise<TaskRow> {
   return prisma.task.update({ where: { id }, data: { status }, include: OWNER_INCLUDE });
 }
+
+const HOME_TASK_INCLUDE = {
+  client: { select: { firstName: true, lastName: true } },
+} satisfies Prisma.TaskInclude;
+
+export type HomeTaskRow = Prisma.TaskGetPayload<{ include: typeof HOME_TASK_INCLUDE }>;
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+/**
+ * Home dashboard's "Tasks Due Today" KPI — strictly today's due date, not
+ * including already-overdue tasks (home-dashboard design.md Decision 2).
+ */
+export function countTasksDueTodayForOwner(ownerId: number): Promise<number> {
+  const todayStart = startOfDay(new Date());
+  const todayEnd = addDays(todayStart, 1);
+  return prisma.task.count({
+    where: { ownerId, status: { not: 'completed' }, dueDate: { gte: todayStart, lt: todayEnd } },
+  });
+}
+
+/**
+ * Home dashboard's Today's Tasks panel — due today OR already overdue, not
+ * yet completed; the service layer flags which rows are overdue.
+ */
+export function findTasksDueOrOverdueForOwner(ownerId: number): Promise<HomeTaskRow[]> {
+  const todayEnd = addDays(startOfDay(new Date()), 1);
+  return prisma.task.findMany({
+    where: { ownerId, status: { not: 'completed' }, dueDate: { lt: todayEnd } },
+    include: HOME_TASK_INCLUDE,
+    orderBy: { dueDate: 'asc' },
+  });
+}

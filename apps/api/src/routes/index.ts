@@ -20,6 +20,7 @@ import { bedRouter } from './bed.routes';
 import { healthWellnessRouter } from './healthWellness.routes';
 import { coordinatedEntryRouter } from './coordinatedEntry.routes';
 import { ceRuleAdminRouter } from './ceRuleAdmin.routes';
+import { dashboardRouter } from './dashboard.routes';
 
 export const apiRouter = Router();
 
@@ -51,3 +52,4 @@ apiRouter.use('/api', bedRouter);
 apiRouter.use('/api', healthWellnessRouter);
 apiRouter.use('/api', coordinatedEntryRouter);
 apiRouter.use('/api', ceRuleAdminRouter);
+apiRouter.use('/api/dashboard', dashboardRouter);

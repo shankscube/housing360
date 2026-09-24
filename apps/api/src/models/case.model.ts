@@ -152,6 +152,21 @@ export async function countCaseKpis(): Promise<CaseKpiCountRows> {
 }
 
 /**
+ * Distinct clients across the case manager's own open cases — the Home
+ * dashboard's "Active Caseload" KPI, personal scoping (home-dashboard
+ * design.md Decision 2), reusing the same `assignedCaseManagerId` predicate
+ * `filterWhere`'s `myCaseload` branch uses above.
+ */
+export async function findActiveCaseloadClientIds(requestingUserId: number): Promise<string[]> {
+  const rows = await prisma.case.findMany({
+    where: { assignedCaseManagerId: requestingUserId, status: 'open' },
+    select: { clientId: true },
+    distinct: ['clientId'],
+  });
+  return rows.map((row) => row.clientId);
+}
+
+/**
  * "Active as of the end of last month" is computed from `openedDate`/`closedAt`
  * rather than a stored historical snapshot — a case counts if it had already
  * been opened by then and either isn't closed yet or closed after that date.

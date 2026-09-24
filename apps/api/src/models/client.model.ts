@@ -260,3 +260,27 @@ export function updateClient(id: string, data: Partial<ClientWriteData>): Promis
 // `countHeadOfHouseholdInHousehold` removed — head of household is now fixed
 // at `Household` creation time (`headClientId`, a real FK), not re-validated
 // on every client write. See design.md's Household decision.
+
+/**
+ * Home dashboard's "Active Caseload" KPI sub-line — among a given set of
+ * client ids (the case manager's caseload), how many were created since the
+ * given date (home-dashboard design.md Decision 2).
+ */
+export function countClientsCreatedSince(clientIds: string[], since: Date): Promise<number> {
+  if (clientIds.length === 0) return Promise.resolve(0);
+  return prisma.client.count({ where: { id: { in: clientIds }, createdAt: { gte: since } } });
+}
+
+/**
+ * Oldest-first client ids, used only to attach demo `DataQualityIssue` rows
+ * to real clients the first time the Home dashboard is requested after any
+ * client exists — home-dashboard design.md Decision 3.
+ */
+export async function findOldestClientIds(limit: number): Promise<string[]> {
+  const rows = await prisma.client.findMany({
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+    take: limit,
+  });
+  return rows.map((row) => row.id);
+}

@@ -119,6 +119,7 @@ model Client {
   clinicalSummary       ClinicalSummary?
   clinicalEncounters    ClinicalEncounter[]
   ceAssessments         CeAssessment[]
+  dataQualityIssues     DataQualityIssue[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1099,4 +1100,26 @@ model BedNight {
 
   @@unique([bedAssignmentId, logDate, shift])
   @@index([bedAssignmentId])
+}
+
+// PROVISIONAL — a minimal read model standing in for a future real Data
+// Quality rule engine (home-dashboard design.md Decision 3). Rows are
+// demo data lazily created by `dataQualityIssue.service.ts`'s
+// `ensureDemoDataQualityIssues()` the first time the Home dashboard is
+// requested after at least one real `Client` exists — never seeded via
+// `prisma/seed.ts`, since that script runs before any client exists.
+// `daysOpen` is deliberately not a column here — it's computed from
+// `openedAt` at read time, same convention as `Case.tabsWithContent` and
+// `ReleaseOfInformation`'s active-consent check.
+model DataQualityIssue {
+  id       String @id @default(uuid())
+  title    String
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+  openedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
 }

@@ -14,6 +14,16 @@ export function countReferralsByCase(caseId: string): Promise<number> {
   return prisma.referral.count({ where: { caseId } });
 }
 
+/**
+ * `pending` (internal referrals' default) / `new` (Coordinated Entry's Send
+ * Referral step) — same open-referral vocabulary `referral.service.ts` and
+ * `coordinatedEntry.service.ts` already write, not accepted/declined.
+ * Home dashboard's "Open Referrals" KPI — home-dashboard design.md Decision 1.
+ */
+export function countOpenReferrals(): Promise<number> {
+  return prisma.referral.count({ where: { status: { in: ['pending', 'new'] } } });
+}
+
 export function findReferralsByCase(caseId: string): Promise<ReferralRow[]> {
   return prisma.referral.findMany({
     where: { caseId },

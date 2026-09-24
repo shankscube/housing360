@@ -255,6 +255,24 @@ function startOfCurrentMonth(): Date {
   return new Date(now.getFullYear(), now.getMonth(), 1);
 }
 
+export interface AssessmentDueOrOverdueCounts {
+  dueToday: number;
+  overdue: number;
+}
+
+/**
+ * Home dashboard's "Assessments Due" KPI — reuses the same `dueTodayWhere`/
+ * `overdueWhere` predicates the Assessment Command Center's own filter chips
+ * use, so the two screens never disagree (home-dashboard design.md Decision 1).
+ */
+export async function countAssessmentsDueOrOverdue(): Promise<AssessmentDueOrOverdueCounts> {
+  const [dueToday, overdue] = await Promise.all([
+    prisma.assessment.count({ where: dueTodayWhere() }),
+    prisma.assessment.count({ where: overdueWhere() }),
+  ]);
+  return { dueToday, overdue };
+}
+
 export async function countAssessmentKpis(): Promise<AssessmentKpiCountRows> {
   const [dueToday, inProgress, completed, completedThisMonth, total] = await Promise.all([
     prisma.assessment.count({ where: dueTodayWhere() }),

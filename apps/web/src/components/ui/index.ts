@@ -21,3 +21,4 @@ export * from './IncomeBenefitsSection';
 export * from './HealthDvSection';
 export * from './DisabilitiesEditor';
 export * from './ConfirmDialog';
+export * from './ListCard';

@@ -13,6 +13,7 @@ import { tabsPreview } from './stories/Tabs.stories';
 import { modalPreview } from './stories/Modal.stories';
 import { expandableRowPreview } from './stories/ExpandableRow.stories';
 import { signaturePadPreview } from './stories/SignaturePad.stories';
+import { listCardPreview } from './stories/ListCard.stories';
 import type { ComponentPreview } from './stories/types';
 
 const PREVIEWS: ComponentPreview[] = [
@@ -31,6 +32,7 @@ const PREVIEWS: ComponentPreview[] = [
   modalPreview,
   expandableRowPreview,
   signaturePadPreview,
+  listCardPreview,
 ];
 
 /**

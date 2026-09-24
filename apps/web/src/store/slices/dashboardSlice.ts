@@ -1,23 +1,31 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { DashboardSummary } from '@housing360/types';
+import type { HomeDashboardResponse } from '@housing360/types';
 import { apiClient } from '../../api/client';
 
+type RequestStatus = 'idle' | 'loading' | 'succeeded' | 'failed';
+
 interface DashboardState {
-  summary: DashboardSummary | null;
-  status: 'idle' | 'loading' | 'succeeded' | 'failed';
+  home: HomeDashboardResponse | null;
+  status: RequestStatus;
   error: string | null;
 }
 
 const initialState: DashboardState = {
-  summary: null,
+  home: null,
   status: 'idle',
   error: null,
 };
 
-export const fetchDashboardSummary = createAsyncThunk('dashboard/fetchSummary', async () => {
-  const response = await apiClient.get<DashboardSummary>('/dashboard/summary');
-  return response.success ? response.data : null;
-});
+export const fetchHomeDashboard = createAsyncThunk(
+  'dashboard/fetchHomeDashboard',
+  async (_arg: void, { rejectWithValue }) => {
+    const response = await apiClient.get<HomeDashboardResponse>('/api/dashboard/home');
+    if (!response.success) {
+      return rejectWithValue(response.message);
+    }
+    return response.data;
+  }
+);
 
 const dashboardSlice = createSlice({
   name: 'dashboard',
@@ -25,16 +33,17 @@ const dashboardSlice = createSlice({
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addCase(fetchDashboardSummary.pending, (state) => {
+      .addCase(fetchHomeDashboard.pending, (state) => {
         state.status = 'loading';
+        state.error = null;
       })
-      .addCase(fetchDashboardSummary.fulfilled, (state, action) => {
+      .addCase(fetchHomeDashboard.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.summary = action.payload;
+        state.home = action.payload;
       })
-      .addCase(fetchDashboardSummary.rejected, (state, action) => {
+      .addCase(fetchHomeDashboard.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.error.message ?? 'Failed to fetch dashboard summary';
+        state.error = (action.payload as string | undefined) ?? 'Failed to fetch the Home dashboard';
       });
   },
 });
