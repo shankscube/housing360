@@ -14,6 +14,8 @@ export interface ProgramEnrollment {
   enrollmentCoc: string | null;
   programCaseManagerId: string | null;
   isPrimary: boolean;
+  /** Set when an Exit assessment completes (`assessment-and-ce-workspace`) — see `ProgramExit`. */
+  endDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -32,3 +34,17 @@ export interface ProgramEnrollmentInput {
 }
 
 export type ProgramEnrollmentUpdateInput = Partial<Omit<ProgramEnrollmentInput, 'clientId'>>;
+
+/** `GET /api/enrollments/:id/summary` — the small context block the Launch
+ * Assessment flow and Assessment form modal render above their fields
+ * (`assessment-and-ce-workspace`). */
+export interface ProgramEnrollmentSummary {
+  id: string;
+  clientId: string;
+  clientName: string;
+  programId: string;
+  programName: string;
+  status: string;
+  startDate: string;
+  endDate: string | null;
+}

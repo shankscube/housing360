@@ -1,34 +1,24 @@
 import { Router } from 'express';
 import {
-  createCoordinatedEntryReferralHandler,
-  getPrioritizationListHandler,
+  createCeReferralHandler,
+  getCeAssessmentDetailHandler,
+  getClientRecommendationHandler,
+  getPriorityQueueHandler,
   getRecommendedProgramsHandler,
-  listPartnerAgenciesForCoordinatedEntryHandler,
-  submitVulnerabilityAssessmentHandler,
+  listCeQuestionsHandler,
+  submitCeAssessmentHandler,
 } from '../controllers/coordinatedEntry.controller';
 import { requireAuth } from '../middlewares/auth';
 
 export const coordinatedEntryRouter = Router();
 
 // Mounted at `/api` by the orchestrator — paths below are relative to that.
-coordinatedEntryRouter.post(
-  '/coordinated-entry/vulnerability-assessment',
-  requireAuth,
-  submitVulnerabilityAssessmentHandler
-);
-coordinatedEntryRouter.get(
-  '/coordinated-entry/recommended-programs',
-  requireAuth,
-  getRecommendedProgramsHandler
-);
-coordinatedEntryRouter.get(
-  '/coordinated-entry/partner-agencies',
-  requireAuth,
-  listPartnerAgenciesForCoordinatedEntryHandler
-);
-coordinatedEntryRouter.post('/coordinated-entry/referrals', requireAuth, createCoordinatedEntryReferralHandler);
-coordinatedEntryRouter.get(
-  '/coordinated-entry/prioritization-list',
-  requireAuth,
-  getPrioritizationListHandler
-);
+// assessment-and-ce-workspace: replaces the old `/coordinated-entry/*` paths
+// with `/ce/*`, matching this change's API shape.
+coordinatedEntryRouter.get('/ce/questions', requireAuth, listCeQuestionsHandler);
+coordinatedEntryRouter.post('/ce/assessments', requireAuth, submitCeAssessmentHandler);
+coordinatedEntryRouter.get('/ce/assessments/:id', requireAuth, getCeAssessmentDetailHandler);
+coordinatedEntryRouter.get('/ce/priority-queue', requireAuth, getPriorityQueueHandler);
+coordinatedEntryRouter.get('/ce/clients/:id/recommendation', requireAuth, getClientRecommendationHandler);
+coordinatedEntryRouter.get('/ce/recommended-programs', requireAuth, getRecommendedProgramsHandler);
+coordinatedEntryRouter.post('/ce/referrals', requireAuth, createCeReferralHandler);

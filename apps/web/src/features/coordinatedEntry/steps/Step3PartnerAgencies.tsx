@@ -1,52 +1,52 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import type { RecommendedProgram } from '@housing360/types';
 import { Button, useToast } from '../../../components/ui';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
-import { fetchPartnerAgencies } from '../../../store/slices/coordinatedEntrySlice';
+import { fetchRecommendedPrograms } from '../../../store/slices/coordinatedEntrySlice';
 
 export interface Step3PartnerAgenciesProps {
-  selectedProviderOrgId: string | null;
-  onSelectProviderOrg: (providerOrgId: string) => void;
+  projectType: string | null;
+  selectedProgram: RecommendedProgram | null;
+  onSelectProgram: (program: RecommendedProgram) => void;
+  referralSuppressed: boolean;
+  onBack: () => void;
   onComplete: () => void;
 }
 
-/** Fixed operational vocabulary, not a HUD data element — see `prisma/seed.ts`'s
- * `SERVICE_DOMAINS` comment; served nowhere as a reference list, so this mirrors
- * the Plan tab's Refer-to-Partner flow's same "not a served option list" call. */
-const SERVICE_DOMAINS = [
-  'housing',
-  'employment',
-  'behavioral_health',
-  'healthcare',
-  'legal',
-  'financial',
-  'childcare',
-  'transportation',
-  'food',
-];
-
-function domainLabel(domain: string): string {
-  return domain
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
+/**
+ * Lists the concrete programs (partner agencies) for the project type chosen
+ * in Step 2, via `GET /api/ce/recommended-programs?projectType=` — each row
+ * now carries its operating organization's address and a live available-bed
+ * count, both rendered here (10.3).
+ */
 export function Step3PartnerAgencies({
-  selectedProviderOrgId,
-  onSelectProviderOrg,
+  projectType,
+  selectedProgram,
+  onSelectProgram,
+  referralSuppressed,
+  onBack,
   onComplete,
 }: Step3PartnerAgenciesProps) {
   const dispatch = useAppDispatch();
   const { showToast } = useToast();
-  const { data: agencies, status } = useAppSelector((state) => state.coordinatedEntry.partnerAgencies);
-  const [domain, setDomain] = useState<string>('');
+  const { data: programs, status } = useAppSelector((state) => state.coordinatedEntry.recommendedPrograms);
 
   useEffect(() => {
-    dispatch(fetchPartnerAgencies(domain || undefined));
-  }, [dispatch, domain]);
+    if (projectType) {
+      dispatch(fetchRecommendedPrograms(projectType));
+    }
+  }, [dispatch, projectType]);
+
+  if (referralSuppressed) {
+    return (
+      <p className="text-sm text-textMuted">
+        This step is unavailable — see the Coordinated Entry Recommendation above for next steps.
+      </p>
+    );
+  }
 
   function handleNext() {
-    if (!selectedProviderOrgId) {
+    if (!selectedProgram) {
       showToast('Select a partner agency to continue.');
       return;
     }
@@ -55,52 +55,46 @@ export function Step3PartnerAgencies({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="max-w-xs">
-        <label className="mb-2 block text-sm font-semibold text-ink">Filter by service domain</label>
-        <select
-          value={domain}
-          onChange={(event) => setDomain(event.target.value)}
-          className="w-full rounded-md border border-borderStrong bg-surface px-5 py-3.5 text-sm text-ink outline-none transition-colors focus:border-ink"
-        >
-          <option value="">All service domains</option>
-          {SERVICE_DOMAINS.map((value) => (
-            <option key={value} value={value}>
-              {domainLabel(value)}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {status === 'loading' ? (
         <p className="text-sm text-textMuted">Loading partner agencies…</p>
-      ) : agencies.length === 0 ? (
-        <p className="text-sm text-textMuted">No partner agencies found for this service domain.</p>
+      ) : programs.length === 0 ? (
+        <p className="text-sm text-textMuted">No project types currently have eligible programs.</p>
       ) : (
         <div className="flex flex-col gap-3">
-          {agencies.map((agency) => (
+          {programs.map((program) => (
             <label
-              key={agency.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-borderRow px-5 py-3.5"
+              key={program.id}
+              className="flex items-center justify-between gap-4 rounded-lg border border-borderRow px-5 py-3.5"
             >
-              <span className="flex items-center gap-3 text-sm text-ink">
+              <span className="flex items-start gap-3 text-sm text-ink">
                 <input
                   type="radio"
                   name="partner-agency"
-                  checked={selectedProviderOrgId === agency.id}
-                  onChange={() => onSelectProviderOrg(agency.id)}
+                  className="mt-1"
+                  checked={selectedProgram?.id === program.id}
+                  onChange={() => onSelectProgram(program)}
                 />
-                {agency.name}
+                <span className="flex flex-col">
+                  <span className="font-semibold">{program.name}</span>
+                  <span className="text-xs text-textMuted">
+                    {program.operatingOrganization?.name ?? 'Unassigned organization'}
+                    {program.operatingOrganization?.address ? ` — ${program.operatingOrganization.address}` : ''}
+                  </span>
+                </span>
               </span>
-              {!agency.isReachable ? (
-                <span className="text-xs font-semibold text-coralDeep">can&apos;t be reached yet</span>
-              ) : null}
+              <span className="whitespace-nowrap text-xs font-semibold text-textMuted">
+                {program.availableBedCount} bed{program.availableBedCount === 1 ? '' : 's'} available
+              </span>
             </label>
           ))}
         </div>
       )}
 
-      <div className="flex justify-end">
-        <Button variant="primary" onClick={handleNext}>
+      <div className="flex justify-between">
+        <Button variant="tertiary" onClick={onBack}>
+          Back
+        </Button>
+        <Button variant="primary" onClick={handleNext} disabled={programs.length === 0}>
           Continue to Send Referral
         </Button>
       </div>

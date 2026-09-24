@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import type { ProgramEnrollmentInput, ProgramEnrollmentUpdateInput } from '@housing360/types';
 import {
   createEnrollment,
+  getEnrollmentSummary,
   listEnrollmentsForClient,
   updateEnrollment,
 } from '../services/enrollment.service';
@@ -43,6 +44,19 @@ export async function updateEnrollmentHandler(req: Request, res: Response, next:
     const input = req.body as ProgramEnrollmentUpdateInput;
     const enrollment = await updateEnrollment(id, input);
     sendSuccess(res, { code: 200, message: 'Enrollment updated', data: enrollment });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getEnrollmentSummaryHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, 'Enrollment id is required');
+    }
+    const summary = await getEnrollmentSummary(id);
+    sendSuccess(res, { code: 200, message: 'Enrollment summary retrieved', data: summary });
   } catch (err) {
     next(err);
   }

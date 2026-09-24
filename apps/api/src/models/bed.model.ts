@@ -30,6 +30,30 @@ export function findBedById(id: string): Promise<BedRow | null> {
   return prisma.bed.findUnique({ where: { id } });
 }
 
+/**
+ * A simple LIVE availability count for `GET /api/ce/recommended-programs` —
+ * deliberately not date/shift-aware like `findAvailableBeds` above (per the
+ * assessment-and-ce-workspace task brief: "keep it simple, don't need to
+ * filter by date/shift for this count unless that's trivial"). A bed counts
+ * as occupied today if it has ANY assignment (any shift) covering today's
+ * date, so a bed with only one of its two shifts assigned is conservatively
+ * counted as unavailable rather than double-counted as available.
+ */
+export async function countAvailableBeds(programId: string, date: Date = new Date()): Promise<number> {
+  return prisma.bed.count({
+    where: {
+      programId,
+      isActive: true,
+      assignments: {
+        none: {
+          startDate: { lte: date },
+          OR: [{ endDate: null }, { endDate: { gte: date } }],
+        },
+      },
+    },
+  });
+}
+
 const ASSIGNMENT_INCLUDE = { bed: true } satisfies Prisma.BedAssignmentInclude;
 export type BedAssignmentRow = Prisma.BedAssignmentGetPayload<{ include: typeof ASSIGNMENT_INCLUDE }>;
 

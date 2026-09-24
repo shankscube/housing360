@@ -1,6 +1,8 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type {
+  Assessment,
   AssessmentDetail,
+  AssessmentEligibility,
   AssessmentFilter,
   AssessmentInput,
   AssessmentKpiCounts,
@@ -9,6 +11,8 @@ import type {
   AssessmentListResult,
   AssessmentTypeFilter,
   AssessmentUpdateInput,
+  Disability,
+  DisabilityInput,
 } from '@housing360/types';
 import { apiClient } from '../../api/client';
 
@@ -33,9 +37,29 @@ interface AssessmentsDetailState {
   error: string | null;
 }
 
+/** `assessment-and-ce-workspace` — the Launch Assessment modal's step 3 fetch.
+ * Scoped to a single active fetch (not keyed by enrollment id) since only one
+ * Launch modal is ever open at a time — the same "one active editing surface"
+ * assumption `useAssessmentFormDraft` documents for the form draft itself. */
+interface AssessmentsEligibilityState {
+  items: AssessmentEligibility[];
+  status: RequestStatus;
+  error: string | null;
+}
+
+/** `assessment-and-ce-workspace` — the Assessment form modal's "Carry forward
+ * previous answers" fetch. Same single-active-instance assumption as above. */
+interface AssessmentsLatestValuesState {
+  data: Assessment | null;
+  status: RequestStatus;
+  error: string | null;
+}
+
 interface AssessmentsState {
   list: AssessmentsListState;
   detail: AssessmentsDetailState;
+  eligibility: AssessmentsEligibilityState;
+  latestValues: AssessmentsLatestValuesState;
 }
 
 const initialState: AssessmentsState = {
@@ -53,6 +77,16 @@ const initialState: AssessmentsState = {
   },
   detail: {
     assessment: null,
+    status: 'idle',
+    error: null,
+  },
+  eligibility: {
+    items: [],
+    status: 'idle',
+    error: null,
+  },
+  latestValues: {
+    data: null,
     status: 'idle',
     error: null,
   },
@@ -93,10 +127,15 @@ export const fetchAssessmentDetail = createAsyncThunk(
   }
 );
 
+/** `POST /api/assessments` actually returns the plain `Assessment` shape
+ * (`assessment.controller.ts`'s `createAssessmentHandler` -> `toAssessment`),
+ * not `AssessmentDetail` — fixed here (was previously mistyped) since the new
+ * Assessment form modal is this thunk's first real consumer and needs the
+ * accurate shape (no `clientName`/`contributions`/etc. on this response). */
 export const createAssessment = createAsyncThunk(
   'assessments/createAssessment',
   async (input: AssessmentInput & { status?: string }, { rejectWithValue }) => {
-    const response = await apiClient.post<AssessmentDetail>('/api/assessments', input);
+    const response = await apiClient.post<Assessment>('/api/assessments', input);
     if (!response.success) {
       return rejectWithValue(response.message);
     }
@@ -104,10 +143,75 @@ export const createAssessment = createAsyncThunk(
   }
 );
 
+/** `PATCH /api/assessments/:id` — see `createAssessment`'s doc comment; same
+ * plain-`Assessment` response shape fix applies here. */
 export const updateAssessment = createAsyncThunk(
   'assessments/updateAssessment',
   async ({ id, input }: { id: string; input: AssessmentUpdateInput }, { rejectWithValue }) => {
-    const response = await apiClient.patch<AssessmentDetail>(`/api/assessments/${id}`, input);
+    const response = await apiClient.patch<Assessment>(`/api/assessments/${id}`, input);
+    if (!response.success) {
+      return rejectWithValue(response.message);
+    }
+    return response.data;
+  }
+);
+
+/** `GET /api/enrollments/:id/assessment-eligibility` — the Launch Assessment
+ * modal's step 3. */
+export const fetchAssessmentEligibility = createAsyncThunk(
+  'assessments/fetchAssessmentEligibility',
+  async (enrollmentId: string, { rejectWithValue }) => {
+    const response = await apiClient.get<AssessmentEligibility[]>(
+      `/api/enrollments/${enrollmentId}/assessment-eligibility`
+    );
+    if (!response.success) {
+      return rejectWithValue(response.message);
+    }
+    return response.data;
+  }
+);
+
+/** `GET /api/enrollments/:id/latest-assessment-values` — "Carry forward
+ * previous answers," fetched only when the user clicks the button (never
+ * auto-applied — see the Assessment form modal). */
+export const fetchLatestAssessmentValues = createAsyncThunk(
+  'assessments/fetchLatestAssessmentValues',
+  async (enrollmentId: string, { rejectWithValue }) => {
+    const response = await apiClient.get<Assessment | null>(
+      `/api/enrollments/${enrollmentId}/latest-assessment-values`
+    );
+    if (!response.success) {
+      return rejectWithValue(response.message);
+    }
+    return response.data;
+  }
+);
+
+/** `DELETE /api/assessments/:id` — limited to drafts server-side (409s on a
+ * completed assessment; the UI never offers this action on a completed row,
+ * so that path is defensive-only here). */
+export const discardAssessment = createAsyncThunk(
+  'assessments/discardAssessment',
+  async (id: string, { rejectWithValue }) => {
+    const response = await apiClient.delete<null>(`/api/assessments/${id}`);
+    if (!response.success) {
+      return rejectWithValue(response.message);
+    }
+    return id;
+  }
+);
+
+/** `PUT /api/assessments/:id/disabilities` — replaces the assessment's full
+ * disability set in one call, for the Assessment form modal's
+ * `DisabilitiesEditor` (which is pure list state — this is what actually
+ * persists it on Save Draft/Complete). */
+export const replaceAssessmentDisabilities = createAsyncThunk(
+  'assessments/replaceAssessmentDisabilities',
+  async (
+    { assessmentId, disabilities }: { assessmentId: string; disabilities: Omit<DisabilityInput, 'assessmentId'>[] },
+    { rejectWithValue }
+  ) => {
+    const response = await apiClient.put<Disability[]>(`/api/assessments/${assessmentId}/disabilities`, disabilities);
     if (!response.success) {
       return rejectWithValue(response.message);
     }
@@ -136,6 +240,16 @@ const assessmentsSlice = createSlice({
     },
     clearSelectedAssessment(state) {
       state.detail = { ...initialState.detail };
+    },
+    /** Reset before/after the Launch Assessment modal opens/closes so a stale
+     * previous enrollment's eligibility never flashes for the next one. */
+    clearEligibility(state) {
+      state.eligibility = { ...initialState.eligibility };
+    },
+    /** Reset when the Assessment form modal closes, so "Carry forward" data
+     * from one session never leaks into the next. */
+    clearLatestValues(state) {
+      state.latestValues = { ...initialState.latestValues };
     },
   },
   extraReducers: (builder) => {
@@ -170,16 +284,54 @@ const assessmentsSlice = createSlice({
         state.detail.error = (action.payload as string | undefined) ?? 'Failed to fetch assessment';
       })
 
-      .addCase(createAssessment.fulfilled, (state, action) => {
-        state.detail.assessment = action.payload;
+      // createAssessment/updateAssessment intentionally have no extraReducer
+      // here: their response is the plain `Assessment` shape (see the thunks'
+      // doc comments), not the richer `AssessmentDetail` `state.detail`
+      // holds — callers (the Assessment form modal) consume the thunk's own
+      // result via `.unwrap()`/matcher rather than reading it back from
+      // state, and re-fetch `fetchAssessmentDetail`/`fetchAssessments` where
+      // a refreshed view is actually needed.
+
+      .addCase(fetchAssessmentEligibility.pending, (state) => {
+        state.eligibility.status = 'loading';
+        state.eligibility.error = null;
       })
-      .addCase(updateAssessment.fulfilled, (state, action) => {
-        state.detail.assessment = action.payload;
+      .addCase(fetchAssessmentEligibility.fulfilled, (state, action) => {
+        state.eligibility.status = 'succeeded';
+        state.eligibility.items = action.payload;
+      })
+      .addCase(fetchAssessmentEligibility.rejected, (state, action) => {
+        state.eligibility.status = 'failed';
+        state.eligibility.error = (action.payload as string | undefined) ?? 'Failed to fetch assessment eligibility';
+      })
+
+      .addCase(fetchLatestAssessmentValues.pending, (state) => {
+        state.latestValues.status = 'loading';
+        state.latestValues.error = null;
+      })
+      .addCase(fetchLatestAssessmentValues.fulfilled, (state, action) => {
+        state.latestValues.status = 'succeeded';
+        state.latestValues.data = action.payload;
+      })
+      .addCase(fetchLatestAssessmentValues.rejected, (state, action) => {
+        state.latestValues.status = 'failed';
+        state.latestValues.error = (action.payload as string | undefined) ?? 'Failed to fetch latest assessment values';
+      })
+
+      .addCase(discardAssessment.fulfilled, (state, action) => {
+        state.list.items = state.list.items.filter((item) => item.id !== action.payload);
       });
   },
 });
 
-export const { setListFilter, setListTypeFilter, setListPage, setSearchTerm, clearSelectedAssessment } =
-  assessmentsSlice.actions;
+export const {
+  setListFilter,
+  setListTypeFilter,
+  setListPage,
+  setSearchTerm,
+  clearSelectedAssessment,
+  clearEligibility,
+  clearLatestValues,
+} = assessmentsSlice.actions;
 
 export default assessmentsSlice.reducer;

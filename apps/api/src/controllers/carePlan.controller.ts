@@ -69,13 +69,16 @@ export async function getCarePlanTemplateHandler(req: Request, res: Response, ne
   }
 }
 
-export async function getRecommendedCarePlanTemplatesHandler(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-) {
+/** Resolves the case's own `programEnrollmentId` and delegates to the same
+ * rule-driven service `GET /enrollments/:id/recommended-care-plan-templates`
+ * calls directly (`assessment-and-ce-workspace` — see that route's
+ * controller in `assessment.controller.ts`). */
+export async function getRecommendedCarePlanTemplatesHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    const templates = await getRecommendedCarePlanTemplates();
+    const { caseId } = req.params;
+    if (!caseId) throw new AppError(400, 'Case id is required');
+    const caseDetail = await getCaseById(caseId);
+    const templates = await getRecommendedCarePlanTemplates(caseDetail.programEnrollmentId);
     sendSuccess(res, { code: 200, message: 'Recommended care plan templates retrieved', data: templates });
   } catch (err) {
     next(err);

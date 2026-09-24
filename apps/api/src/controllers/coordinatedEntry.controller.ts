@@ -1,30 +1,90 @@
 import { NextFunction, Request, Response } from 'express';
-import type { CoordinatedEntryReferralInput, PrioritizationListQuery, VulnerabilityAssessmentInput } from '@housing360/types';
+import type { CeAssessmentInput, CeReferralInput, PriorityQueueFilter, PriorityQueueQuery } from '@housing360/types';
 import {
-  createCoordinatedEntryReferral,
-  getPrioritizationList,
-  getRecommendedPrograms,
-  listPartnerAgenciesForCoordinatedEntry,
-  submitVulnerabilityAssessment,
+  createCeReferral,
+  getCeAssessmentDetail,
+  getClientRecommendation,
+  getPriorityQueue,
+  getRecommendedProgramsByProjectType,
+  listActiveQuestions,
+  submitCeAssessment,
 } from '../services/coordinatedEntry.service';
 import { sendSuccess } from '../utils/responder';
 import { AppError } from '../utils/AppError';
 
-function parseBooleanQuery(value: unknown): boolean {
-  return value === 'true' || value === '1';
+const VALID_PRIORITY_QUEUE_FILTERS: PriorityQueueFilter[] = [
+  'TOP5',
+  'VETERAN',
+  'YOUTH',
+  'SAFETY_ALERT',
+  'AWAITING_REFERRAL',
+];
+
+export async function listCeQuestionsHandler(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const questions = await listActiveQuestions();
+    sendSuccess(res, { code: 200, message: 'Coordinated Entry questions retrieved', data: questions });
+  } catch (err) {
+    next(err);
+  }
 }
 
-export async function submitVulnerabilityAssessmentHandler(req: Request, res: Response, next: NextFunction) {
+export async function submitCeAssessmentHandler(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.user) {
       throw new AppError(401, 'Not authenticated');
     }
-    const input = req.body as Partial<VulnerabilityAssessmentInput> | undefined;
+    const input = req.body as Partial<CeAssessmentInput> | undefined;
     if (!input?.clientId) {
       throw new AppError(400, 'clientId is required');
     }
-    const result = await submitVulnerabilityAssessment(input as VulnerabilityAssessmentInput, req.user.id);
-    sendSuccess(res, { code: 201, message: 'Vulnerability assessment recorded', data: result });
+    if (!input.responses || input.responses.length === 0) {
+      throw new AppError(400, 'responses is required');
+    }
+    const result = await submitCeAssessment(input as CeAssessmentInput, req.user.id);
+    sendSuccess(res, { code: 201, message: 'Coordinated Entry assessment recorded', data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getCeAssessmentDetailHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    if (!id) throw new AppError(400, 'id is required');
+    const detail = await getCeAssessmentDetail(id);
+    sendSuccess(res, { code: 200, message: 'Coordinated Entry assessment retrieved', data: detail });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getPriorityQueueHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const rawFilter = typeof req.query.filter === 'string' ? req.query.filter.toUpperCase() : undefined;
+    const filter =
+      rawFilter && (VALID_PRIORITY_QUEUE_FILTERS as string[]).includes(rawFilter)
+        ? (rawFilter as PriorityQueueFilter)
+        : undefined;
+    const query: PriorityQueueQuery = {
+      filter,
+      search: typeof req.query.search === 'string' ? req.query.search : undefined,
+      page: req.query.page ? Number(req.query.page) : undefined,
+      pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
+    };
+    const result = await getPriorityQueue(query);
+    sendSuccess(res, { code: 200, message: 'Priority queue retrieved', data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getClientRecommendationHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    if (!id) throw new AppError(400, 'id is required');
+    const recommendation = await getClientRecommendation(id);
+    sendSuccess(res, { code: 200, message: 'Client recommendation retrieved', data: recommendation });
   } catch (err) {
     next(err);
   }
@@ -32,58 +92,25 @@ export async function submitVulnerabilityAssessmentHandler(req: Request, res: Re
 
 export async function getRecommendedProgramsHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    const clientId = typeof req.query.clientId === 'string' ? req.query.clientId : undefined;
-    if (!clientId) {
-      throw new AppError(400, 'clientId is required');
+    const projectType = typeof req.query.projectType === 'string' ? req.query.projectType : undefined;
+    if (!projectType) {
+      throw new AppError(400, 'projectType is required');
     }
-    const programs = await getRecommendedPrograms(clientId);
+    const programs = await getRecommendedProgramsByProjectType(projectType);
     sendSuccess(res, { code: 200, message: 'Recommended programs retrieved', data: programs });
   } catch (err) {
     next(err);
   }
 }
 
-export async function listPartnerAgenciesForCoordinatedEntryHandler(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
+export async function createCeReferralHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    const domain = typeof req.query.domain === 'string' ? req.query.domain : undefined;
-    const agencies = await listPartnerAgenciesForCoordinatedEntry(domain);
-    sendSuccess(res, { code: 200, message: 'Partner agencies retrieved', data: agencies });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function createCoordinatedEntryReferralHandler(req: Request, res: Response, next: NextFunction) {
-  try {
-    const input = req.body as Partial<CoordinatedEntryReferralInput> | undefined;
-    if (!input?.clientId || !input.vulnerabilityAssessmentId || !input.programId || !input.providerOrgId) {
-      throw new AppError(
-        400,
-        'clientId, vulnerabilityAssessmentId, programId, and providerOrgId are required'
-      );
+    const input = req.body as Partial<CeReferralInput> | undefined;
+    if (!input?.ceAssessmentId) {
+      throw new AppError(400, 'ceAssessmentId is required');
     }
-    const referral = await createCoordinatedEntryReferral(input as CoordinatedEntryReferralInput);
+    const referral = await createCeReferral(input as CeReferralInput);
     sendSuccess(res, { code: 201, message: 'Referral sent', data: referral });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getPrioritizationListHandler(req: Request, res: Response, next: NextFunction) {
-  try {
-    const query: PrioritizationListQuery = {
-      topFive: parseBooleanQuery(req.query.topFive),
-      veteran: parseBooleanQuery(req.query.veteran),
-      unaccompaniedYouth: parseBooleanQuery(req.query.unaccompaniedYouth),
-      safetyAlert: parseBooleanQuery(req.query.safetyAlert),
-      awaitingReferral: parseBooleanQuery(req.query.awaitingReferral),
-    };
-    const items = await getPrioritizationList(query);
-    sendSuccess(res, { code: 200, message: 'Prioritization list retrieved', data: items });
   } catch (err) {
     next(err);
   }

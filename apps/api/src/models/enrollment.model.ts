@@ -18,6 +18,18 @@ export function findEnrollmentById(id: string): Promise<EnrollmentRow | null> {
   return prisma.programEnrollment.findUnique({ where: { id }, ...WITH_PROGRAM });
 }
 
+const WITH_SUMMARY = {
+  include: { program: true, client: { select: { firstName: true, lastName: true } } },
+} satisfies { include: Prisma.ProgramEnrollmentInclude };
+
+export type EnrollmentSummaryRow = Prisma.ProgramEnrollmentGetPayload<typeof WITH_SUMMARY>;
+
+/** `GET /api/enrollments/:id/summary` — joins the client's name directly via
+ * Prisma (not `client.model.ts`, see `enrollment.service.ts`'s comment). */
+export function findEnrollmentSummaryById(id: string): Promise<EnrollmentSummaryRow | null> {
+  return prisma.programEnrollment.findUnique({ where: { id }, ...WITH_SUMMARY });
+}
+
 export function countEnrollmentsForClient(clientId: string): Promise<number> {
   return prisma.programEnrollment.count({ where: { clientId } });
 }

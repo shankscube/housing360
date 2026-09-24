@@ -1,55 +1,83 @@
 import { useEffect } from 'react';
-import type { PrioritizationListItem, PrioritizationListQuery } from '@housing360/types';
-import { DataTable, StatusBadge, type DataTableColumn } from '../../components/ui';
+import type { PriorityQueueItem } from '@housing360/types';
+import { DataTable, FilterChipRow, StatusBadge, type DataTableColumn, type FilterChipOption } from '../../components/ui';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { fetchPrioritizationList, togglePrioritizationFilter } from '../../store/slices/coordinatedEntrySlice';
+import {
+  fetchPriorityQueue,
+  setPriorityQueueFilter,
+  setPriorityQueuePage,
+  setPriorityQueueSearch,
+  type PriorityQueueFilterOption,
+} from '../../store/slices/coordinatedEntrySlice';
 
-const QUICK_FILTERS: { key: keyof PrioritizationListQuery; label: string }[] = [
-  { key: 'topFive', label: 'Top 5 High Priority' },
-  { key: 'veteran', label: 'Veterans' },
-  { key: 'unaccompaniedYouth', label: 'Unaccompanied Youth' },
-  { key: 'safetyAlert', label: 'Safety Alerts' },
-  { key: 'awaitingReferral', label: 'Awaiting Referral' },
+const QUICK_FILTER_OPTIONS: FilterChipOption[] = [
+  { value: 'ALL', label: 'All' },
+  { value: 'TOP5', label: 'Top 5 High Priority' },
+  { value: 'VETERAN', label: 'Veterans' },
+  { value: 'YOUTH', label: 'Unaccompanied Youth' },
+  { value: 'SAFETY_ALERT', label: 'Safety Alerts' },
+  { value: 'AWAITING_REFERRAL', label: 'Awaiting Referral' },
 ];
 
-const chipBaseClass = 'whitespace-nowrap rounded-lg px-6.5 py-3 text-sm font-semibold transition-colors';
-
-interface PrioritizationTableRow extends PrioritizationListItem, Record<string, unknown> {}
+interface PriorityQueueTableRow extends PriorityQueueItem, Record<string, unknown> {}
 
 /**
- * Every quick filter here is an independent toggle, composed as an AND — not
- * a single-select `FilterChipRow` group (design.md Decision 5). "Top 5 High
- * Priority" is a sort truncation applied after the others, so it composes
- * with them rather than excluding them (e.g. "Top 5" + "Veterans" = the 5
- * highest-priority veterans).
+ * Single-select quick filter (`PriorityQueueFilter`: `TOP5|VETERAN|YOUTH|
+ * SAFETY_ALERT|AWAITING_REFERRAL`), combined with `search` — a deliberate
+ * break from the old five-independent-toggle-buttons model (design.md
+ * Decision 13 / coordinated-entry spec's "Priority Queue Filter Is
+ * Single-Select"). Combining two quick filters is no longer possible.
  */
 export function PrioritizationList() {
   const dispatch = useAppDispatch();
-  const { items, status, filters } = useAppSelector((state) => state.coordinatedEntry.prioritizationList);
+  const { items, status, filter, search, page, pageSize, total } = useAppSelector(
+    (state) => state.coordinatedEntry.priorityQueue
+  );
 
   useEffect(() => {
-    dispatch(fetchPrioritizationList(filters));
-  }, [dispatch, filters]);
+    dispatch(
+      fetchPriorityQueue({
+        filter: filter === 'ALL' ? undefined : filter,
+        search: search || undefined,
+        page,
+        pageSize,
+      })
+    );
+  }, [dispatch, filter, search, page, pageSize]);
 
-  const columns: DataTableColumn<PrioritizationTableRow>[] = [
+  const columns: DataTableColumn<PriorityQueueTableRow>[] = [
     { key: 'clientName', header: 'Client' },
-    { key: 'score', header: 'Score', numeric: true },
+    { key: 'totalScore', header: 'Score', numeric: true },
     {
-      key: 'priorityTier',
+      key: 'bandName',
       header: 'Priority',
-      cell: (row) => <StatusBadge label={row.priorityTier} />,
+      cell: (row) => (row.bandName ? <StatusBadge label={row.bandName} /> : <span>—</span>),
     },
     {
       key: 'flags',
       header: 'Flags',
       cell: (row) => (
         <div className="flex flex-wrap gap-2">
-          {row.isVeteran ? <StatusBadge label="Veteran" tone="navy" /> : null}
-          {row.isUnaccompaniedYouth ? <StatusBadge label="Unaccompanied Youth" tone="navy" /> : null}
-          {row.safetyAlert ? <StatusBadge label="Safety Alert" tone="coral" /> : null}
-          {row.isAwaitingReferral ? <StatusBadge label="Awaiting Referral" tone="gold" /> : null}
+          {row.flags.veteran ? <StatusBadge label="Veteran" tone="navy" /> : null}
+          {row.flags.unaccompaniedYouth ? <StatusBadge label="Unaccompanied Youth" tone="navy" /> : null}
+          {row.flags.safetyAlert ? <StatusBadge label="Safety Alert" tone="coral" /> : null}
         </div>
       ),
+    },
+    {
+      key: 'isAwaitingReferral',
+      header: 'Referral Status',
+      cell: (row) =>
+        row.isAwaitingReferral ? (
+          <StatusBadge label="Awaiting Referral" tone="gold" />
+        ) : (
+          <StatusBadge label="Referred" tone="teal" />
+        ),
+    },
+    {
+      key: 'assessedAt',
+      header: 'Assessed',
+      cell: (row) => new Date(row.assessedAt).toLocaleDateString(),
     },
   ];
 
@@ -57,34 +85,33 @@ export function PrioritizationList() {
     <div className="overflow-hidden rounded-2xl bg-surface shadow-card">
       <div className="flex flex-col gap-5 px-9 py-7">
         <h2 className="font-display text-lg text-ink">Prioritization List</h2>
-        <div className="flex flex-wrap gap-3" role="group" aria-label="Prioritization quick filters">
-          {QUICK_FILTERS.map((quickFilter) => {
-            const isActive = Boolean(filters[quickFilter.key]);
-            return (
-              <button
-                key={quickFilter.key}
-                type="button"
-                aria-pressed={isActive}
-                onClick={() => dispatch(togglePrioritizationFilter(quickFilter.key))}
-                className={
-                  isActive
-                    ? `${chipBaseClass} bg-ink text-surface shadow-lifted hover:bg-inkHover`
-                    : `${chipBaseClass} bg-surfaceSubtle text-textQuiet hover:bg-borderStep hover:text-ink`
-                }
-              >
-                {quickFilter.label}
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center justify-between gap-5">
+          <FilterChipRow
+            options={QUICK_FILTER_OPTIONS}
+            activeValue={filter}
+            onChange={(value) => dispatch(setPriorityQueueFilter(value as PriorityQueueFilterOption))}
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => dispatch(setPriorityQueueSearch(event.target.value))}
+            placeholder="Search clients"
+            className="w-full max-w-xs rounded-md border border-borderStrong bg-surface px-5 py-3 text-sm text-ink outline-none transition-colors focus:border-ink"
+          />
         </div>
       </div>
 
-      <DataTable<PrioritizationTableRow>
+      <DataTable<PriorityQueueTableRow>
         columns={columns}
-        rows={items as PrioritizationTableRow[]}
-        rowKey={(row) => row.vulnerabilityAssessmentId}
+        rows={items as PriorityQueueTableRow[]}
+        rowKey={(row) => row.ceAssessmentId}
         isLoading={status === 'loading'}
-        emptyMessage="No clients match the current filters."
+        emptyMessage="No clients match the current filter."
+        pagination={
+          filter === 'TOP5'
+            ? undefined
+            : { page, pageSize, total, onPageChange: (nextPage) => dispatch(setPriorityQueuePage(nextPage)) }
+        }
       />
     </div>
   );

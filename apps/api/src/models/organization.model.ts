@@ -18,3 +18,17 @@ export function findOrganizationsByServiceDomain(domain?: string): Promise<Organ
 export function findOrganizationById(id: string): Promise<OrganizationRow | null> {
   return prisma.organization.findUnique({ where: { id }, include: ORG_INCLUDE });
 }
+
+/**
+ * The Coordinated Entry referral path (`POST /api/ce/referrals`) needs a
+ * "referrer's default organization" and no such concept exists in the schema
+ * — best-effort choice, documented in assessment-and-ce-workspace's report:
+ * the earliest-created partner organization, or `null` if none exists.
+ */
+export function findFirstPartnerOrganization(): Promise<OrganizationRow | null> {
+  return prisma.organization.findFirst({
+    where: { isPartner: true },
+    include: ORG_INCLUDE,
+    orderBy: { createdAt: 'asc' },
+  });
+}

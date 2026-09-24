@@ -1,10 +1,16 @@
-import type { ProgramEnrollment, ProgramEnrollmentInput, ProgramEnrollmentUpdateInput } from '@housing360/types';
+import type {
+  ProgramEnrollment,
+  ProgramEnrollmentInput,
+  ProgramEnrollmentSummary,
+  ProgramEnrollmentUpdateInput,
+} from '@housing360/types';
 import {
   countEnrollmentsForClient,
   createEnrollment as createEnrollmentRow,
   findClientNameById,
   findEnrollmentById,
   findEnrollmentsByClient,
+  findEnrollmentSummaryById,
   findProgramById,
   updateEnrollment as updateEnrollmentRow,
   type EnrollmentRow,
@@ -27,6 +33,7 @@ function toEnrollment(row: EnrollmentRow): ProgramEnrollment {
     enrollmentCoc: row.enrollmentCoc,
     programCaseManagerId: row.programCaseManagerId,
     isPrimary: row.isPrimary,
+    endDate: row.endDate ? row.endDate.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -115,4 +122,30 @@ export async function updateEnrollment(
 
   const row = await updateEnrollmentRow(id, data);
   return toEnrollment(row);
+}
+
+/**
+ * `GET /api/enrollments/:id/summary` — the small client-name/program-name/
+ * status/dates block the Launch Assessment flow and Assessment form modal
+ * render for context (`assessment-and-ce-workspace`). Reads the client
+ * relation directly via Prisma (`enrollment.model.ts`'s
+ * `findEnrollmentSummaryById`) rather than through `client.model.ts`/
+ * `client.mapper.ts` — same reasoning as `findClientNameById` above, those
+ * files are being rewritten concurrently by another agent for this change.
+ */
+export async function getEnrollmentSummary(id: string): Promise<ProgramEnrollmentSummary> {
+  const row = await findEnrollmentSummaryById(id);
+  if (!row) {
+    throw new AppError(404, 'Program enrollment not found');
+  }
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    clientName: `${row.client.firstName} ${row.client.lastName}`,
+    programId: row.programId,
+    programName: row.program.name,
+    status: row.status,
+    startDate: row.startDate.toISOString(),
+    endDate: row.endDate ? row.endDate.toISOString() : null,
+  };
 }

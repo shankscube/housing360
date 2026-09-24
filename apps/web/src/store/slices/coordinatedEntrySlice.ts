@@ -1,14 +1,15 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type {
+  CeAssessmentDetail,
+  CeAssessmentInput,
+  CeQuestion,
+  CeReferralInput,
   ClientSearchResultItem,
-  CoordinatedEntryReferralInput,
-  PartnerAgency,
-  PrioritizationListItem,
-  PrioritizationListQuery,
-  Program,
+  PriorityQueueFilter,
+  PriorityQueueQuery,
+  PriorityQueueItem,
   Referral,
-  VulnerabilityAssessment,
-  VulnerabilityAssessmentInput,
+  RecommendedProgram,
 } from '@housing360/types';
 import { apiClient } from '../../api/client';
 
@@ -20,47 +21,63 @@ interface AsyncSlice<T> {
   error: string | null;
 }
 
+/** `'ALL'` represents "no quick filter active" — the priority queue endpoint
+ * itself just omits `filter` in that case (see `buildPriorityQueueQueryString`). */
+export type PriorityQueueFilterOption = PriorityQueueFilter | 'ALL';
+
+interface PriorityQueueState {
+  items: PriorityQueueItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  status: RequestStatus;
+  error: string | null;
+  filter: PriorityQueueFilterOption;
+  search: string;
+}
+
 interface CoordinatedEntryState {
   client: ClientSearchResultItem | null;
-  vulnerabilityAssessment: AsyncSlice<VulnerabilityAssessment | null>;
-  recommendedPrograms: AsyncSlice<Program[]>;
-  partnerAgencies: AsyncSlice<PartnerAgency[]>;
+  questions: AsyncSlice<CeQuestion[]>;
+  assessment: AsyncSlice<CeAssessmentDetail | null>;
+  recommendedPrograms: AsyncSlice<RecommendedProgram[]>;
   referral: AsyncSlice<Referral | null>;
-  prioritizationList: {
-    items: PrioritizationListItem[];
-    status: RequestStatus;
-    error: string | null;
-    filters: PrioritizationListQuery;
-  };
+  priorityQueue: PriorityQueueState;
 }
 
 const initialState: CoordinatedEntryState = {
   client: null,
-  vulnerabilityAssessment: { data: null, status: 'idle', error: null },
+  questions: { data: [], status: 'idle', error: null },
+  assessment: { data: null, status: 'idle', error: null },
   recommendedPrograms: { data: [], status: 'idle', error: null },
-  partnerAgencies: { data: [], status: 'idle', error: null },
   referral: { data: null, status: 'idle', error: null },
-  prioritizationList: {
+  priorityQueue: {
     items: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
     status: 'idle',
     error: null,
-    filters: {
-      topFive: false,
-      veteran: false,
-      unaccompaniedYouth: false,
-      safetyAlert: false,
-      awaitingReferral: false,
-    },
+    filter: 'ALL',
+    search: '',
   },
 };
 
-export const submitVulnerabilityAssessment = createAsyncThunk(
-  'coordinatedEntry/submitVulnerabilityAssessment',
-  async (input: VulnerabilityAssessmentInput, { rejectWithValue }) => {
-    const response = await apiClient.post<VulnerabilityAssessment>(
-      '/api/coordinated-entry/vulnerability-assessment',
-      input
-    );
+export const fetchCeQuestions = createAsyncThunk(
+  'coordinatedEntry/fetchCeQuestions',
+  async (_: void, { rejectWithValue }) => {
+    const response = await apiClient.get<CeQuestion[]>('/api/ce/questions');
+    if (!response.success) {
+      return rejectWithValue(response.message);
+    }
+    return response.data;
+  }
+);
+
+export const submitCeAssessment = createAsyncThunk(
+  'coordinatedEntry/submitCeAssessment',
+  async (input: CeAssessmentInput, { rejectWithValue }) => {
+    const response = await apiClient.post<CeAssessmentDetail>('/api/ce/assessments', input);
     if (!response.success) {
       return rejectWithValue(response.message);
     }
@@ -70,9 +87,9 @@ export const submitVulnerabilityAssessment = createAsyncThunk(
 
 export const fetchRecommendedPrograms = createAsyncThunk(
   'coordinatedEntry/fetchRecommendedPrograms',
-  async (clientId: string, { rejectWithValue }) => {
-    const response = await apiClient.get<Program[]>(
-      `/api/coordinated-entry/recommended-programs?clientId=${encodeURIComponent(clientId)}`
+  async (projectType: string, { rejectWithValue }) => {
+    const response = await apiClient.get<RecommendedProgram[]>(
+      `/api/ce/recommended-programs?projectType=${encodeURIComponent(projectType)}`
     );
     if (!response.success) {
       return rejectWithValue(response.message);
@@ -81,11 +98,10 @@ export const fetchRecommendedPrograms = createAsyncThunk(
   }
 );
 
-export const fetchPartnerAgencies = createAsyncThunk(
-  'coordinatedEntry/fetchPartnerAgencies',
-  async (domain: string | undefined, { rejectWithValue }) => {
-    const qs = domain ? `?domain=${encodeURIComponent(domain)}` : '';
-    const response = await apiClient.get<PartnerAgency[]>(`/api/coordinated-entry/partner-agencies${qs}`);
+export const sendCeReferral = createAsyncThunk(
+  'coordinatedEntry/sendCeReferral',
+  async (input: CeReferralInput, { rejectWithValue }) => {
+    const response = await apiClient.post<Referral>('/api/ce/referrals', input);
     if (!response.success) {
       return rejectWithValue(response.message);
     }
@@ -93,34 +109,25 @@ export const fetchPartnerAgencies = createAsyncThunk(
   }
 );
 
-export const sendCoordinatedEntryReferral = createAsyncThunk(
-  'coordinatedEntry/sendReferral',
-  async (input: CoordinatedEntryReferralInput, { rejectWithValue }) => {
-    const response = await apiClient.post<Referral>('/api/coordinated-entry/referrals', input);
-    if (!response.success) {
-      return rejectWithValue(response.message);
-    }
-    return response.data;
-  }
-);
-
-function buildPrioritizationQueryString(query: PrioritizationListQuery): string {
+function buildPriorityQueueQueryString(query: PriorityQueueQuery): string {
   const params = new URLSearchParams();
-  if (query.topFive) params.set('topFive', 'true');
-  if (query.veteran) params.set('veteran', 'true');
-  if (query.unaccompaniedYouth) params.set('unaccompaniedYouth', 'true');
-  if (query.safetyAlert) params.set('safetyAlert', 'true');
-  if (query.awaitingReferral) params.set('awaitingReferral', 'true');
+  if (query.filter) params.set('filter', query.filter);
+  if (query.search) params.set('search', query.search);
+  if (query.page) params.set('page', String(query.page));
+  if (query.pageSize) params.set('pageSize', String(query.pageSize));
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
 
-export const fetchPrioritizationList = createAsyncThunk(
-  'coordinatedEntry/fetchPrioritizationList',
-  async (query: PrioritizationListQuery, { rejectWithValue }) => {
-    const response = await apiClient.get<PrioritizationListItem[]>(
-      `/api/coordinated-entry/prioritization-list${buildPrioritizationQueryString(query)}`
-    );
+export const fetchPriorityQueue = createAsyncThunk(
+  'coordinatedEntry/fetchPriorityQueue',
+  async (query: PriorityQueueQuery, { rejectWithValue }) => {
+    const response = await apiClient.get<{
+      items: PriorityQueueItem[];
+      total: number;
+      page: number;
+      pageSize: number;
+    }>(`/api/ce/priority-queue${buildPriorityQueueQueryString(query)}`);
     if (!response.success) {
       return rejectWithValue(response.message);
     }
@@ -137,33 +144,49 @@ const coordinatedEntrySlice = createSlice({
     },
     resetCoordinatedEntryFlow(state) {
       state.client = null;
-      state.vulnerabilityAssessment = { ...initialState.vulnerabilityAssessment };
+      state.assessment = { ...initialState.assessment };
       state.recommendedPrograms = { ...initialState.recommendedPrograms };
-      state.partnerAgencies = { ...initialState.partnerAgencies };
       state.referral = { ...initialState.referral };
     },
-    togglePrioritizationFilter(
-      state,
-      action: PayloadAction<keyof PrioritizationListQuery>
-    ) {
-      const key = action.payload;
-      state.prioritizationList.filters[key] = !state.prioritizationList.filters[key];
+    setPriorityQueueFilter(state, action: PayloadAction<PriorityQueueFilterOption>) {
+      state.priorityQueue.filter = action.payload;
+      state.priorityQueue.page = 1;
+    },
+    setPriorityQueueSearch(state, action: PayloadAction<string>) {
+      state.priorityQueue.search = action.payload;
+      state.priorityQueue.page = 1;
+    },
+    setPriorityQueuePage(state, action: PayloadAction<number>) {
+      state.priorityQueue.page = action.payload;
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(submitVulnerabilityAssessment.pending, (state) => {
-        state.vulnerabilityAssessment.status = 'loading';
-        state.vulnerabilityAssessment.error = null;
+      .addCase(fetchCeQuestions.pending, (state) => {
+        state.questions.status = 'loading';
+        state.questions.error = null;
       })
-      .addCase(submitVulnerabilityAssessment.fulfilled, (state, action) => {
-        state.vulnerabilityAssessment.status = 'succeeded';
-        state.vulnerabilityAssessment.data = action.payload;
+      .addCase(fetchCeQuestions.fulfilled, (state, action) => {
+        state.questions.status = 'succeeded';
+        state.questions.data = action.payload;
       })
-      .addCase(submitVulnerabilityAssessment.rejected, (state, action) => {
-        state.vulnerabilityAssessment.status = 'failed';
-        state.vulnerabilityAssessment.error =
-          (action.payload as string | undefined) ?? 'Failed to submit vulnerability assessment';
+      .addCase(fetchCeQuestions.rejected, (state, action) => {
+        state.questions.status = 'failed';
+        state.questions.error = (action.payload as string | undefined) ?? 'Failed to fetch Coordinated Entry questions';
+      })
+
+      .addCase(submitCeAssessment.pending, (state) => {
+        state.assessment.status = 'loading';
+        state.assessment.error = null;
+      })
+      .addCase(submitCeAssessment.fulfilled, (state, action) => {
+        state.assessment.status = 'succeeded';
+        state.assessment.data = action.payload;
+      })
+      .addCase(submitCeAssessment.rejected, (state, action) => {
+        state.assessment.status = 'failed';
+        state.assessment.error =
+          (action.payload as string | undefined) ?? 'Failed to submit the Coordinated Entry assessment';
       })
 
       .addCase(fetchRecommendedPrograms.pending, (state) => {
@@ -180,49 +203,44 @@ const coordinatedEntrySlice = createSlice({
           (action.payload as string | undefined) ?? 'Failed to fetch recommended programs';
       })
 
-      .addCase(fetchPartnerAgencies.pending, (state) => {
-        state.partnerAgencies.status = 'loading';
-        state.partnerAgencies.error = null;
-      })
-      .addCase(fetchPartnerAgencies.fulfilled, (state, action) => {
-        state.partnerAgencies.status = 'succeeded';
-        state.partnerAgencies.data = action.payload;
-      })
-      .addCase(fetchPartnerAgencies.rejected, (state, action) => {
-        state.partnerAgencies.status = 'failed';
-        state.partnerAgencies.error = (action.payload as string | undefined) ?? 'Failed to fetch partner agencies';
-      })
-
-      .addCase(sendCoordinatedEntryReferral.pending, (state) => {
+      .addCase(sendCeReferral.pending, (state) => {
         state.referral.status = 'loading';
         state.referral.error = null;
       })
-      .addCase(sendCoordinatedEntryReferral.fulfilled, (state, action) => {
+      .addCase(sendCeReferral.fulfilled, (state, action) => {
         state.referral.status = 'succeeded';
         state.referral.data = action.payload;
       })
-      .addCase(sendCoordinatedEntryReferral.rejected, (state, action) => {
+      .addCase(sendCeReferral.rejected, (state, action) => {
         state.referral.status = 'failed';
         state.referral.error = (action.payload as string | undefined) ?? 'Failed to send referral';
       })
 
-      .addCase(fetchPrioritizationList.pending, (state) => {
-        state.prioritizationList.status = 'loading';
-        state.prioritizationList.error = null;
+      .addCase(fetchPriorityQueue.pending, (state) => {
+        state.priorityQueue.status = 'loading';
+        state.priorityQueue.error = null;
       })
-      .addCase(fetchPrioritizationList.fulfilled, (state, action) => {
-        state.prioritizationList.status = 'succeeded';
-        state.prioritizationList.items = action.payload;
+      .addCase(fetchPriorityQueue.fulfilled, (state, action) => {
+        state.priorityQueue.status = 'succeeded';
+        state.priorityQueue.items = action.payload.items;
+        state.priorityQueue.total = action.payload.total;
+        state.priorityQueue.page = action.payload.page;
+        state.priorityQueue.pageSize = action.payload.pageSize;
       })
-      .addCase(fetchPrioritizationList.rejected, (state, action) => {
-        state.prioritizationList.status = 'failed';
-        state.prioritizationList.error =
-          (action.payload as string | undefined) ?? 'Failed to fetch prioritization list';
+      .addCase(fetchPriorityQueue.rejected, (state, action) => {
+        state.priorityQueue.status = 'failed';
+        state.priorityQueue.error =
+          (action.payload as string | undefined) ?? 'Failed to fetch the priority queue';
       });
   },
 });
 
-export const { selectCoordinatedEntryClient, resetCoordinatedEntryFlow, togglePrioritizationFilter } =
-  coordinatedEntrySlice.actions;
+export const {
+  selectCoordinatedEntryClient,
+  resetCoordinatedEntryFlow,
+  setPriorityQueueFilter,
+  setPriorityQueueSearch,
+  setPriorityQueuePage,
+} = coordinatedEntrySlice.actions;
 
 export default coordinatedEntrySlice.reducer;

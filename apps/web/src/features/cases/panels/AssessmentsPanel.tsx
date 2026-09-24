@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react';
 import type { AssessmentListItem, ProgramEnrollment } from '@housing360/types';
-import { Button, StatusBadge, useToast } from '../../../components/ui';
+import { Button, ConfirmDialog, StatusBadge, useToast } from '../../../components/ui';
 import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import { fetchRecommendedCarePlanTemplates } from '../../../store/slices/carePlansSlice';
+import { fetchCaseDetail } from '../../../store/slices/casesSlice';
 import { getClientEnrollments } from '../../../api/client';
 import { apiClient } from '../../../api/client';
 import { caseOptionLabel } from '../shared/caseLabels';
 import { CarePlanWizard } from '../plan/CarePlanWizard';
-import { NotYetBuiltPanel } from '../NotYetBuiltPanel';
+import {
+  AssessmentFormModal,
+  type AssessmentFormLaunchContext,
+} from '../../assessments/AssessmentFormModal';
+import { LaunchAssessmentModal, type LaunchAssessmentTarget } from '../../assessments/LaunchAssessmentModal';
 
 export interface AssessmentsPanelProps {
   clientId: string;
   caseId: string;
-  /** From `CaseDetail.tabsWithContent.assessments` — true once an Entry Assessment exists for this case's enrollment. */
-  hasContent: boolean;
 }
 
 function stageLabel(stage: number): string {
@@ -24,7 +27,15 @@ function formatDate(value: string): string {
   return new Date(value).toLocaleDateString();
 }
 
-export function AssessmentsPanel({ clientId, caseId, hasContent }: AssessmentsPanelProps) {
+/** One modal instance covers both the "start a new assessment" and "resume a
+ * draft" paths — mirrors `AssessmentCommandCenterPage`'s `FormModalState`
+ * union exactly (`viaLaunch` gates whether `AssessmentFormModal` renders its
+ * "‹ Back" action). */
+type FormModalState =
+  | { mode: 'create'; launchContext: AssessmentFormLaunchContext; viaLaunch: true }
+  | { mode: 'edit'; assessmentId: string; viaLaunch: boolean };
+
+export function AssessmentsPanel({ clientId, caseId }: AssessmentsPanelProps) {
   const dispatch = useAppDispatch();
   const { showToast } = useToast();
   const { recommendedTemplates } = useAppSelector((state) => state.carePlans);
@@ -33,6 +44,10 @@ export function AssessmentsPanel({ clientId, caseId, hasContent }: AssessmentsPa
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState('');
   const [assessments, setAssessments] = useState<AssessmentListItem[]>([]);
   const [showWizardFromTemplate, setShowWizardFromTemplate] = useState<string | null>(null);
+
+  const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const [formModal, setFormModal] = useState<FormModalState | null>(null);
+  const [discardTargetId, setDiscardTargetId] = useState<string | null>(null);
 
   useEffect(() => {
     getClientEnrollments(clientId).then((response) => {
@@ -45,32 +60,69 @@ export function AssessmentsPanel({ clientId, caseId, hasContent }: AssessmentsPa
     dispatch(fetchRecommendedCarePlanTemplates(caseId));
   }, [clientId, caseId, dispatch]);
 
-  useEffect(() => {
+  function refetchAssessments() {
     if (!selectedEnrollmentId) return;
     apiClient.get<AssessmentListItem[]>(`/api/enrollments/${selectedEnrollmentId}/assessments/list`).then((response) => {
       if (response.success) {
         setAssessments(response.data);
       }
     });
+  }
+
+  useEffect(() => {
+    refetchAssessments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEnrollmentId]);
 
-  function handleDiscard(id: string) {
-    apiClient.delete(`/api/assessments/${id}`).then((response) => {
-      if (response.success) {
-        setAssessments((prev) => prev.filter((a) => a.id !== id));
-        showToast('Draft assessment discarded.', 'success');
-      } else {
-        showToast('Failed to discard the draft assessment.');
-      }
-    });
+  function handleLaunch(target: LaunchAssessmentTarget) {
+    setShowLaunchModal(false);
+    if (target.resumeAssessmentId) {
+      setFormModal({ mode: 'edit', assessmentId: target.resumeAssessmentId, viaLaunch: true });
+    } else if (target.stage) {
+      setFormModal({
+        mode: 'create',
+        launchContext: {
+          clientId: target.clientId,
+          clientName: target.clientName,
+          enrollment: target.enrollment,
+          stage: target.stage,
+        },
+        viaLaunch: true,
+      });
+    }
   }
 
-  function handlePlaceholderRoute() {
-    showToast('The Entry Assessment form and scoring arrive in a later phase — not available from here yet.');
+  function handleResumeRow(assessmentId: string) {
+    setFormModal({ mode: 'edit', assessmentId, viaLaunch: false });
   }
 
-  if (!hasContent && assessments.length === 0) {
-    return <NotYetBuiltPanel tabLabel="Assessments" />;
+  function handleFormSaved() {
+    setFormModal(null);
+    refetchAssessments();
+    // Cheap, and it's what flips `CaseDetail.tabsWithContent.assessments` to
+    // true once a first assessment exists on this case — other panels (e.g.
+    // the HUD Data tab's readiness checklist) read that flag off the
+    // case-detail fetch `CaseDetailPage` owns, so without this refetch a
+    // freshly-completed Entry Assessment wouldn't be reflected there until
+    // the next full case-detail fetch (e.g. a tab switch away and back).
+    dispatch(fetchCaseDetail(caseId));
+  }
+
+  function handleFormDiscarded() {
+    setFormModal(null);
+    refetchAssessments();
+  }
+
+  async function handleConfirmDiscardRow() {
+    if (!discardTargetId) return;
+    const response = await apiClient.delete(`/api/assessments/${discardTargetId}`);
+    if (response.success) {
+      setAssessments((prev) => prev.filter((a) => a.id !== discardTargetId));
+      showToast('Draft assessment discarded.', 'success');
+    } else {
+      showToast('Failed to discard the draft assessment.');
+    }
+    setDiscardTargetId(null);
   }
 
   return (
@@ -92,7 +144,7 @@ export function AssessmentsPanel({ clientId, caseId, hasContent }: AssessmentsPa
 
       <div className="flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-ink">Assessments</h2>
-        <Button variant="secondary" size="sm" onClick={handlePlaceholderRoute}>
+        <Button variant="secondary" size="sm" onClick={() => setShowLaunchModal(true)}>
           New Assessment
         </Button>
       </div>
@@ -116,10 +168,10 @@ export function AssessmentsPanel({ clientId, caseId, hasContent }: AssessmentsPa
                 <StatusBadge label={caseOptionLabel(assessment.status)} />
                 {assessment.status === 'in_progress' ? (
                   <>
-                    <Button variant="tertiary" size="sm" onClick={handlePlaceholderRoute}>
+                    <Button variant="tertiary" size="sm" onClick={() => handleResumeRow(assessment.id)}>
                       Resume Draft
                     </Button>
-                    <Button variant="tertiary" size="sm" onClick={() => handleDiscard(assessment.id)}>
+                    <Button variant="tertiary" size="sm" onClick={() => setDiscardTargetId(assessment.id)}>
                       Discard
                     </Button>
                   </>
@@ -158,6 +210,42 @@ export function AssessmentsPanel({ clientId, caseId, hasContent }: AssessmentsPa
           preFillTemplateId={showWizardFromTemplate}
         />
       ) : null}
+
+      <LaunchAssessmentModal
+        isOpen={showLaunchModal}
+        onClose={() => setShowLaunchModal(false)}
+        onLaunch={handleLaunch}
+      />
+
+      {formModal ? (
+        <AssessmentFormModal
+          isOpen
+          mode={formModal.mode}
+          launchContext={formModal.mode === 'create' ? formModal.launchContext : undefined}
+          assessmentId={formModal.mode === 'edit' ? formModal.assessmentId : undefined}
+          onBack={
+            formModal.viaLaunch
+              ? () => {
+                  setFormModal(null);
+                  setShowLaunchModal(true);
+                }
+              : undefined
+          }
+          onClose={() => setFormModal(null)}
+          onSaved={handleFormSaved}
+          onDiscarded={handleFormDiscarded}
+        />
+      ) : null}
+
+      <ConfirmDialog
+        isOpen={Boolean(discardTargetId)}
+        onClose={() => setDiscardTargetId(null)}
+        onConfirm={handleConfirmDiscardRow}
+        title="Discard draft assessment?"
+        message="This permanently deletes the draft and its answers. This can't be undone."
+        confirmLabel="Discard Draft"
+        danger
+      />
     </div>
   );
 }

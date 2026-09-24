@@ -1,3 +1,5 @@
+import type { Disability } from './disability';
+
 /** Wizard step 4 — HUD 3.917 Living Situation. */
 export interface AssessmentLivingSituation {
   situationCategory?: string | null;
@@ -157,9 +159,24 @@ export interface AssessmentListItem {
   scoreLabel: string | null;
 }
 
+/**
+ * Exit Details — captured only when an assessment's HUD stage is Exit and it
+ * completes (`assessment-and-ce-workspace`). These are NOT `Assessment`
+ * columns; they're passed through to the `ProgramExit` row created in the
+ * same transaction as scoring — see design.md Decision 3.
+ */
+export interface AssessmentExitDetails {
+  destinationType?: string | null;
+  destination?: string | null;
+  caseManagerExitReason?: string | null;
+  /** Defaults to "now" server-side when omitted. */
+  exitDate?: string | null;
+}
+
 export type AssessmentInput = AssessmentLivingSituation &
   AssessmentIncomeBenefitsInsurance &
-  AssessmentHealthDv & {
+  AssessmentHealthDv &
+  AssessmentExitDetails & {
     clientId: string;
     programEnrollmentId: string;
     caseId: string;
@@ -193,6 +210,10 @@ export interface AssessmentKpiCounts {
   dueToday: number;
   inProgress: number;
   completed: number;
+  /** Completed assessments whose `assessmentDate` falls in the current calendar month
+   * (`assessment-and-ce-workspace`'s dashboard KPI — distinct from `completed`, which
+   * is all-time and backs the "Completed" status filter chip's count). */
+  completedThisMonth: number;
   total: number;
 }
 
@@ -204,13 +225,53 @@ export interface AssessmentListResult {
   kpis: AssessmentKpiCounts;
 }
 
-/** `GET /api/assessments/:id` — the list-row shape plus the handful of fields
- * only the detail view needs. */
-export interface AssessmentDetail extends AssessmentListItem {
-  caseId: string;
-  cycleNumber: number;
-  createdAt: string;
-  updatedAt: string;
+/** One `assessment_score_contributions` row — the audit trail behind a
+ * scored assessment's total (`assessment-and-ce-workspace`). */
+export interface AssessmentScoreContributionItem {
+  field: string;
+  value: string | null;
+  contribution: number;
+}
+
+/**
+ * `GET /api/assessments/:id` — every persisted `Assessment` field (the
+ * Living Situation / Income & Benefits / Health & DV section values
+ * included, so a "Resume Draft" editor can seed its form from this response
+ * alone) plus client/program-enrollment/assessor display names and the score
+ * breakdown/disabilities child rows the detail view needs. Extends
+ * `Assessment` directly (not `AssessmentListItem`, which deliberately omits
+ * the section fields for the lighter list view) — still structurally
+ * assignable everywhere `AssessmentListItem` was expected, since every
+ * `AssessmentListItem` field is still present here.
+ */
+export interface AssessmentDetail extends Assessment {
+  clientName: string;
+  programEnrollmentName: string;
+  /** `Assessment.assessorId`/its resolved display name — `null` until a case
+   * manager has saved this assessment at least once. */
+  assessorId: number | null;
+  assessorName: string | null;
+  /** Score breakdown — one row per scoring rule that matched; sums to `score`. */
+  contributions: AssessmentScoreContributionItem[];
+  disabilities: Disability[];
+}
+
+/**
+ * `assessment-and-ce-workspace` — the four HUD stages a program enrollment can
+ * be assessed at, with whether starting one is currently allowed. `update` has
+ * no dedicated `dataCollectionStage` in this schema (only entry/annual/exit
+ * are tracked — see `constants/assessmentTypes.ts`), so it never carries a
+ * `draftAssessmentId`; the other three do when an unfinished draft exists.
+ */
+export type AssessmentEligibilityStage = 'entry' | 'update' | 'annual' | 'exit';
+
+export interface AssessmentEligibility {
+  stage: AssessmentEligibilityStage;
+  allowed: boolean;
+  reason: string;
+  /** Set when a non-`completed` assessment already exists for this stage — the UI
+   * should offer "Resume Draft" against this id instead of starting a new one. */
+  draftAssessmentId?: string | null;
 }
 
 /** Per-enrollment Entry Assessment status, as served by the intake-snapshot endpoint. */

@@ -142,6 +142,55 @@ export const HUD_OPTIONS: Record<string, HudOption[]> = {
 
   ],
 
+  // HUD 3.12 Destination — grouped by category, mirroring the
+  // situationCategory/situationType two-level pattern above. PLACEHOLDER
+  // taxonomy for the Exit Details "Destination Type -> Destination" select
+  // (assessment-and-ce-workspace) — confirm the exact code list against the
+  // source org (see that change's design.md Open Questions); no prior art for
+  // Destination existed in this file before this change.
+  destinationType: [
+    { value: 'homeless', label: 'Homeless' },
+    { value: 'institutional', label: 'Institutional' },
+    { value: 'temporary', label: 'Temporary' },
+    { value: 'permanent', label: 'Permanent' },
+    { value: 'other', label: 'Other' },
+  ],
+  destination: [
+    // Homeless
+    { value: '16', label: 'Place not meant for habitation (Homeless)' },
+    { value: '1', label: 'Emergency shelter (Homeless)' },
+    { value: '18', label: 'Safe Haven (Homeless)' },
+    // Institutional
+    { value: '15', label: 'Foster care home or foster care group home (Institutional)' },
+    { value: '6', label: 'Hospital or other residential non-psychiatric medical facility (Institutional)' },
+    { value: '7', label: 'Jail, prison, or juvenile detention facility (Institutional)' },
+    { value: '25', label: 'Long-term care facility or nursing home (Institutional)' },
+    { value: '4', label: 'Psychiatric hospital or other psychiatric facility (Institutional)' },
+    { value: '5', label: 'Substance abuse treatment facility or detox center (Institutional)' },
+    // Temporary
+    { value: '29', label: 'Residential project or halfway house with no homeless criteria (Temporary)' },
+    { value: '14', label: 'Hotel or motel paid for without emergency shelter voucher (Temporary)' },
+    { value: '27', label: 'Host home, non-crisis (Temporary)' },
+    { value: '2', label: 'Transitional housing for homeless persons (Temporary)' },
+    { value: '32', label: 'Staying or living with family, temporary tenure (Temporary)' },
+    { value: '36', label: 'Staying or living with friends, temporary tenure (Temporary)' },
+    // Permanent
+    { value: '3', label: 'Permanent housing for formerly homeless persons (Permanent)' },
+    { value: '10', label: 'Rental by client, no ongoing subsidy (Permanent)' },
+    { value: '19', label: 'Rental by client, with ongoing subsidy (Permanent)' },
+    { value: '20', label: 'Owned by client, with ongoing subsidy (Permanent)' },
+    { value: '21', label: 'Owned by client, no ongoing subsidy (Permanent)' },
+    { value: '22', label: 'Staying or living with family, permanent tenure (Permanent)' },
+    { value: '23', label: 'Staying or living with friends, permanent tenure (Permanent)' },
+    // Other
+    { value: '24', label: 'Deceased (Other)' },
+    { value: '17', label: 'Other (Other)' },
+    { value: '30', label: 'No exit interview completed (Other)' },
+    { value: '8', label: "Client doesn't know (Other)" },
+    { value: '9', label: 'Client prefers not to answer (Other)' },
+    { value: '99', label: 'Data not collected (Other)' },
+  ],
+
   // HUD 4.02 Income Sources
   incomeSources: [
     { value: 'earned', label: 'Earned income' },

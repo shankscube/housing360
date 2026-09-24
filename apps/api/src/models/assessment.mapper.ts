@@ -6,7 +6,8 @@ import type {
   AssessmentListItem,
   AssessmentType,
 } from '@housing360/types';
-import type { AssessmentListRow, AssessmentRow } from './assessment.model';
+import type { AssessmentDetailRow, AssessmentListRow, AssessmentRow } from './assessment.model';
+import { toDisability } from './disability.mapper';
 
 function toAssessmentType(type: string | null): AssessmentType | null {
   return type === 'entry' || type === 'annual' || type === 'exit' ? type : null;
@@ -214,13 +215,27 @@ export function toAssessmentListItem(row: AssessmentListRow): AssessmentListItem
   };
 }
 
-/** `GET /api/assessments/:id` — list-row shape plus the fields only the detail view needs. */
-export function toAssessmentDetail(row: AssessmentListRow): AssessmentDetail {
+/** `GET /api/assessments/:id` — every persisted `Assessment` field (including
+ * the Living Situation / Income & Benefits / Health & DV section values a
+ * "Resume Draft" editor needs to pre-fill itself — `toAssessmentListItem`
+ * deliberately omits those for the list view, but the detail view needs them)
+ * plus client/program-enrollment/assessor display names and the score
+ * breakdown/disability child rows (`assessment-and-ce-workspace`). Previously
+ * built on `toAssessmentListItem` (which drops every section field) — fixed
+ * to build on `toAssessment` instead so this response is actually usable for
+ * seeding an edit form, not just for read-only display. */
+export function toAssessmentDetail(row: AssessmentDetailRow): AssessmentDetail {
   return {
-    ...toAssessmentListItem(row),
-    caseId: row.caseId,
-    cycleNumber: row.cycleNumber,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    ...toAssessment(row),
+    clientName: `${row.client.firstName} ${row.client.lastName}`,
+    programEnrollmentName: row.programEnrollment.name,
+    assessorId: row.assessorId,
+    assessorName: row.assessor ? `${row.assessor.firstName} ${row.assessor.lastName}` : null,
+    contributions: row.scoreContributions.map((c) => ({
+      field: c.field,
+      value: c.value,
+      contribution: c.contribution,
+    })),
+    disabilities: row.disabilities.map(toDisability),
   };
 }

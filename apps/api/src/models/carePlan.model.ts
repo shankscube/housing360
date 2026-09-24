@@ -29,6 +29,19 @@ export function findGoalDefinitions() {
   return prisma.goalDefinition.findMany({ orderBy: { name: 'asc' } });
 }
 
+const TEMPLATE_RULE_INCLUDE = { template: true } satisfies Prisma.CarePlanTemplateRuleInclude;
+export type CarePlanTemplateRuleRow = Prisma.CarePlanTemplateRuleGetPayload<{ include: typeof TEMPLATE_RULE_INCLUDE }>;
+
+/** `assessment-and-ce-workspace` — every configured rule, template included,
+ * highest `priority` first. Read by `carePlan.service.ts`'s
+ * `getRecommendedCarePlanTemplates` (design.md Decision 5). */
+export function findCarePlanTemplateRules(): Promise<CarePlanTemplateRuleRow[]> {
+  return prisma.carePlanTemplateRule.findMany({
+    include: TEMPLATE_RULE_INCLUDE,
+    orderBy: { priority: 'desc' },
+  });
+}
+
 const CARE_PLAN_INCLUDE = {
   goals: {
     include: { tasks: { include: { owner: { select: { id: true, firstName: true, lastName: true } } } } },

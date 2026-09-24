@@ -18,7 +18,11 @@ export const logger = pino({
   // `description`/`notes` cover `case-workspace`'s free-text fields (Task
   // description, Case description, referral/disbursement notes) — same
   // rationale as meetingNotes/nextSteps: case-manager free text can contain
-  // client-identifying detail.
+  // client-identifying detail. `caseManagerExitReason` is the same kind of
+  // free text on an Exit assessment's Exit Details (`assessment-and-ce-workspace`);
+  // `destinationType`/`destination` are short HUD codes, not free text, but
+  // are redacted alongside it anyway since they're part of the same
+  // Exit Details block and directly describe where a client went.
   redact: {
     paths: [
       'req.body.ssn.value',
@@ -31,6 +35,9 @@ export const logger = pino({
       'req.body.notes',
       'req.body.clientSignature',
       'req.body.staffSignature',
+      'req.body.caseManagerExitReason',
+      'req.body.destinationType',
+      'req.body.destination',
       'req.body.*.ssn.value',
       'req.body.*.dob.value',
       'req.body.*.mobile',

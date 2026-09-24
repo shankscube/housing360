@@ -16,3 +16,8 @@ export * from './Tabs';
 export * from './Modal';
 export * from './ExpandableRow';
 export * from './SignaturePad';
+export * from './LivingSituationSection';
+export * from './IncomeBenefitsSection';
+export * from './HealthDvSection';
+export * from './DisabilitiesEditor';
+export * from './ConfirmDialog';

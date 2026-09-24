@@ -69,11 +69,7 @@ export function CaseDetailPage() {
           {activeTab === 'plan' ? <PlanPanel caseId={caseDetail.id} clientId={caseDetail.clientId} /> : null}
           {activeTab === 'services' ? <ServicesPanel clientId={caseDetail.clientId} /> : null}
           {activeTab === 'assessments' ? (
-            <AssessmentsPanel
-              clientId={caseDetail.clientId}
-              caseId={caseDetail.id}
-              hasContent={caseDetail.tabsWithContent.assessments}
-            />
+            <AssessmentsPanel clientId={caseDetail.clientId} caseId={caseDetail.id} />
           ) : null}
           {activeTab === 'referrals' ? <ReferralsPanel caseId={caseDetail.id} /> : null}
           {activeTab === 'hudData' ? <HudDataPanel caseId={caseDetail.id} /> : null}

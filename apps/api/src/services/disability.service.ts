@@ -3,6 +3,7 @@ import {
   createDisability as createDisabilityRow,
   deleteDisability as deleteDisabilityRow,
   findDisabilityById,
+  replaceDisabilitiesForAssessment,
 } from '../models/disability.model';
 import { toDisability } from '../models/disability.mapper';
 import { AppError } from '../utils/AppError';
@@ -23,4 +24,15 @@ export async function removeDisability(id: string): Promise<void> {
     throw new AppError(404, 'Disability not found');
   }
   await deleteDisabilityRow(id);
+}
+
+/** `PUT /assessments/:id/disabilities` — replaces the full set in one call
+ * (`assessment-and-ce-workspace`); `assessmentId` comes from the URL param on
+ * every row, same convention as `addDisabilityToAssessment`. */
+export async function replaceDisabilities(
+  assessmentId: string,
+  disabilities: Omit<DisabilityInput, 'assessmentId'>[]
+): Promise<Disability[]> {
+  const rows = await replaceDisabilitiesForAssessment(assessmentId, disabilities);
+  return rows.map(toDisability);
 }

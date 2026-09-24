@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes } from 'react';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'tertiary';
+export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'danger';
 
 /**
  * `md` is the design bundle's page-level button (Home's New Intake / New
@@ -21,6 +21,8 @@ const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary: 'bg-ink text-surface hover:bg-inkHover',
   secondary: 'bg-teal text-ink hover:bg-tealHover',
   tertiary: 'border border-borderStrong bg-surface text-ink hover:border-ink',
+  /** Destructive actions (e.g. `ConfirmDialog`'s `danger` prop) — the bundle's coral, its "urgent/overdue/rejected" tone. */
+  danger: 'bg-coral text-surface hover:opacity-90',
 };
 
 const SIZE_CLASS: Record<ButtonSize, string> = {
@@ -29,9 +31,11 @@ const SIZE_CLASS: Record<ButtonSize, string> = {
 };
 
 /**
- * The shared action button. Anything needing one of the bundle's three button
+ * The shared action button. Anything needing one of the bundle's button
  * treatments renders this rather than restyling a bare `<button>`, so a
  * `PageHeader` action and a standalone button of the same variant can't drift.
+ * `danger` (coral) was added for `ConfirmDialog`'s destructive-confirm case —
+ * still the only place button color lives.
  *
  * `type` defaults to `"button"` so a `Button` inside a form doesn't submit by
  * accident; pass `type="submit"` explicitly where that's wanted.

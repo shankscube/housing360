@@ -21,13 +21,16 @@ import {
   findCarePlansByCase,
   findCarePlanTemplateById,
   findCarePlanTemplateList,
+  findCarePlanTemplateRules,
   findCoveredServiceDomainsByClient,
   findGoalAssignmentById,
   findGoalDefinitions,
   updateCarePlan as updateCarePlanRow,
   updateGoalAssignment as updateGoalAssignmentRow,
+  type CarePlanTemplateRuleRow,
   type GoalCreateData,
 } from '../models/carePlan.model';
+import { findLatestCompletedAssessmentForEnrollment, type AssessmentRow } from '../models/assessment.model';
 import { createTask } from './task.service';
 import {
   toCarePlanDetail,
@@ -93,16 +96,81 @@ export async function getCarePlanTemplateById(id: string): Promise<CarePlanTempl
   return toCarePlanTemplate(row);
 }
 
+/** A rule's condition string is `"field=value"` — compares the enrollment's
+ * latest assessment's own column value, case-insensitively. Anything else
+ * (missing `=`, unknown field, null value) never matches. */
+function fieldConditionMatches(condition: string, assessment: AssessmentRow): boolean {
+  const separatorIndex = condition.indexOf('=');
+  if (separatorIndex === -1) {
+    return false;
+  }
+  const field = condition.slice(0, separatorIndex).trim();
+  const expected = condition.slice(separatorIndex + 1).trim();
+  const actual = (assessment as unknown as Record<string, unknown>)[field];
+  if (actual === null || actual === undefined || expected === '') {
+    return false;
+  }
+  return String(actual).trim().toLowerCase() === expected.toLowerCase();
+}
+
+/** A rule matches when its score band contains the assessment's score
+ * (bounds are independent — a `null` bound is unbounded on that side) OR its
+ * `fieldCondition` matches — whichever criteria the rule actually specifies;
+ * a rule with neither never matches (design.md Decision 5). */
+function templateRuleMatches(rule: CarePlanTemplateRuleRow, assessment: AssessmentRow): boolean {
+  const hasScoreBand = rule.scoreBandMin !== null || rule.scoreBandMax !== null;
+  if (hasScoreBand && assessment.score !== null) {
+    const min = rule.scoreBandMin ?? -Infinity;
+    const max = rule.scoreBandMax ?? Infinity;
+    if (assessment.score >= min && assessment.score <= max) {
+      return true;
+    }
+  }
+  if (rule.fieldCondition) {
+    return fieldConditionMatches(rule.fieldCondition, assessment);
+  }
+  return false;
+}
+
 /**
- * "Recommended for this client" has no defined scoring criteria in the
- * proposal beyond "shown first" — this change surfaces every published
- * template as recommended (no ranking signal exists yet, e.g. from the
- * client's assessment or disability data) rather than fabricating a
- * relevance score. Revisit once a real signal is identified.
+ * Ranks published care plan templates using `care_plan_template_rules`
+ * against the enrollment's latest completed, scored assessment, highest
+ * `priority` first — replacing the prior "every published template, no real
+ * signal" placeholder (design.md Decision 5). Falls back to every published
+ * template, preserving the placeholder's old behavior, whenever the
+ * enrollment has no completed/scored assessment yet OR no rule matches (the
+ * assessment-tracking spec's "No scored assessment falls back to all
+ * published templates" requirement) — so an enrollment never sees an empty
+ * recommendation strip.
  */
-export async function getRecommendedCarePlanTemplates(): Promise<CarePlanTemplateListItem[]> {
-  const rows = await findCarePlanTemplateList(true);
-  return rows.map(toCarePlanTemplateListItem);
+export async function getRecommendedCarePlanTemplates(
+  programEnrollmentId: string
+): Promise<CarePlanTemplateListItem[]> {
+  const fallbackToAllPublished = async () => {
+    const rows = await findCarePlanTemplateList(true);
+    return rows.map(toCarePlanTemplateListItem);
+  };
+
+  const latestAssessment = await findLatestCompletedAssessmentForEnrollment(programEnrollmentId);
+  if (!latestAssessment || latestAssessment.score === null) {
+    return fallbackToAllPublished();
+  }
+
+  const rules = await findCarePlanTemplateRules();
+  const seenTemplateIds = new Set<string>();
+  const matchedTemplates: CarePlanTemplateListItem[] = [];
+  for (const rule of rules) {
+    if (
+      rule.template.isPublished &&
+      !seenTemplateIds.has(rule.templateId) &&
+      templateRuleMatches(rule, latestAssessment)
+    ) {
+      seenTemplateIds.add(rule.templateId);
+      matchedTemplates.push(toCarePlanTemplateListItem(rule.template));
+    }
+  }
+
+  return matchedTemplates.length > 0 ? matchedTemplates : fallbackToAllPublished();
 }
 
 export async function listGoalDefinitions(): Promise<GoalDefinition[]> {

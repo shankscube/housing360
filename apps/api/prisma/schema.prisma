@@ -15,20 +15,26 @@ model AppMeta {
   value String
 }
 
-// The single seeded case-manager demo user. No roles/permissions in this phase.
+// The single seeded case-manager demo user. `role` is the minimal permission
+// gate added for `ce:manage-rules` (assessment-and-ce-workspace design.md
+// Decision 8) — not a general role/permission management system; see
+// `constants/permissions.ts`'s `ROLE_PERMISSIONS` map for what each role grants.
 model User {
   id           Int      @id @default(autoincrement())
   email        String   @unique
   passwordHash String
   firstName    String
   lastName     String
+  role         String   @default("case_manager")
   createdAt    DateTime @default(now())
 
-  assignedCases                    Case[]
-  createdCases                     Case[]                    @relation("CaseCreatedBy")
-  updatedCases                     Case[]                    @relation("CaseUpdatedBy")
-  ownedTasks                       Task[]
-  assessedVulnerabilityAssessments VulnerabilityAssessment[]
+  assignedCases         Case[]
+  createdCases          Case[]         @relation("CaseCreatedBy")
+  updatedCases          Case[]         @relation("CaseUpdatedBy")
+  ownedTasks            Task[]
+  assessedAssessments   Assessment[]
+  assessedCeAssessments CeAssessment[]
+  ceRuleChanges         CeRuleChange[]
 }
 
 enum Sex {
@@ -101,18 +107,18 @@ model Client {
   headOfHousehold   Household? @relation("HouseholdHead")
   relationshipToHoh String?
 
-  enrollments              ProgramEnrollment[]
-  cases                    Case[]
-  assessments              Assessment[]
-  interactionSummaries     InteractionSummary[]
-  tasks                    Task[]
-  releasesOfInformation    ReleaseOfInformation[]
-  carePlans                CarePlan[]
-  referrals                Referral[]
-  serviceDisbursements     ServiceDisbursement[]
-  clinicalSummary          ClinicalSummary?
-  clinicalEncounters       ClinicalEncounter[]
-  vulnerabilityAssessments VulnerabilityAssessment[]
+  enrollments           ProgramEnrollment[]
+  cases                 Case[]
+  assessments           Assessment[]
+  interactionSummaries  InteractionSummary[]
+  tasks                 Task[]
+  releasesOfInformation ReleaseOfInformation[]
+  carePlans             CarePlan[]
+  referrals             Referral[]
+  serviceDisbursements  ServiceDisbursement[]
+  clinicalSummary       ClinicalSummary?
+  clinicalEncounters    ClinicalEncounter[]
+  ceAssessments         CeAssessment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -137,25 +143,36 @@ model Household {
 }
 
 // Seeded (3-5 active rows), not user-creatable in this phase.
+// `projectTypeCode`/`operatingOrganizationId` (assessment-and-ce-workspace
+// design.md Decision 7) are new, minimal additions so Coordinated Entry can
+// match a score band's recommended project types to real programs and show
+// each one's operating organization's address — placeholder seed values,
+// pending confirmation of the real HUD project-type taxonomy against the
+// source org.
 model Program {
-  id          String              @id @default(uuid())
-  name        String
-  isActive    Boolean             @default(true)
-  enrollments ProgramEnrollment[]
-  referrals   Referral[]
-  benefits    Benefit[]
-  beds        Bed[]
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  id                      String              @id @default(uuid())
+  name                    String
+  isActive                Boolean             @default(true)
+  projectTypeCode         String?
+  operatingOrganizationId String?
+  operatingOrganization   Organization?       @relation(fields: [operatingOrganizationId], references: [id])
+  enrollments             ProgramEnrollment[]
+  referrals               Referral[]
+  benefits                Benefit[]
+  beds                    Bed[]
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  @@index([operatingOrganizationId])
 }
 
 model ProgramEnrollment {
-  id                   String   @id @default(uuid())
+  id                   String    @id @default(uuid())
   clientId             String
-  client               Client   @relation(fields: [clientId], references: [id])
+  client               Client    @relation(fields: [clientId], references: [id])
   householdId          String?
   programId            String
-  program              Program  @relation(fields: [programId], references: [id])
+  program              Program   @relation(fields: [programId], references: [id])
   name                 String
   startDate            DateTime
   status               String
@@ -163,12 +180,16 @@ model ProgramEnrollment {
   disablingCondition   String?
   enrollmentCoc        String?
   programCaseManagerId String?
-  isPrimary            Boolean  @default(false)
+  isPrimary            Boolean   @default(false)
+  // Set (alongside `status`) when an Exit assessment completes — see
+  // `ProgramExit` and assessment-and-ce-workspace design.md Decision 3.
+  endDate              DateTime?
 
   cases              Case[]
   assessments        Assessment[]
   benefitAssignments BenefitAssignment[]
   bedAssignments     BedAssignment[]
+  programExits       ProgramExit[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -268,6 +289,14 @@ model Assessment {
   score       Int?
   scoreLabel  String?
   cycleNumber Int       @default(1)
+
+  // assessment-and-ce-workspace additions: who recorded it, and its sync
+  // status against the legacy HMIS system (not an integration this change
+  // implements — just the tracked field/value pair).
+  assessorId       Int?
+  assessor         User?     @relation(fields: [assessorId], references: [id])
+  legacySyncStatus String    @default("not_synced")
+  legacySyncDate   DateTime?
 
   // Living situation (HUD 3.917)
   situationCategory               String?
@@ -373,7 +402,9 @@ model Assessment {
   dvWhenOccurred           String?
   dvCurrentlyFleeing       String?
 
-  disabilities Disability[]
+  disabilities       Disability[]
+  scoreContributions AssessmentScoreContribution[]
+  programExit        ProgramExit?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -526,6 +557,7 @@ model CarePlanTemplate {
 
   goals     CarePlanTemplateGoal[]
   carePlans CarePlan[]
+  rules     CarePlanTemplateRule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -637,6 +669,7 @@ model Organization {
   serviceDomains      OrganizationServiceDomain[]
   referralsAsProvider Referral[]                  @relation("ReferralProvider")
   referralsAsReferrer Referral[]                  @relation("ReferralReferrer")
+  operatedPrograms    Program[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -695,8 +728,8 @@ model Referral {
   declineNotes        String? @db.Text
   isExternal          Boolean @default(false)
 
-  originatingForCases                Case[]                   @relation("CaseOriginatingReferral")
-  originatingVulnerabilityAssessment VulnerabilityAssessment?
+  originatingForCases     Case[]        @relation("CaseOriginatingReferral")
+  originatingCeAssessment CeAssessment?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -706,29 +739,219 @@ model Referral {
   @@index([providerOrgId])
 }
 
-// Coordinated Entry's screening record (`assessments-and-coordinated-entry`).
-// Deliberately separate from `Assessment` — it can exist before a client has
-// any `ProgramEnrollment` (Assessment.programEnrollmentId is required), and
-// its question set is a placeholder pending the real VI-SPDAT-style design
-// (see design.md Decision 3). `answers` is a Json bag for exactly that reason:
-// the real instrument isn't designed yet, so no fixed column set is carved in.
-model VulnerabilityAssessment {
-  id           String    @id @default(uuid())
+// Created when an Exit-stage assessment completes, in the same transaction
+// that closes the enrollment (sets `ProgramEnrollment.endDate`/`status`) —
+// see assessment-and-ce-workspace design.md Decision 3. `destinationType`/
+// `destination` reuse the two-level HUD-code-map pattern `hudOptions.ts`
+// already uses for Living Situation's `situationCategory`/`situationType`.
+model ProgramExit {
+  id                    String            @id @default(uuid())
+  programEnrollmentId   String
+  programEnrollment     ProgramEnrollment @relation(fields: [programEnrollmentId], references: [id])
+  assessmentId          String            @unique
+  assessment            Assessment        @relation(fields: [assessmentId], references: [id])
+  exitDate              DateTime          @default(now())
+  destinationType       String?
+  destination           String?
+  caseManagerExitReason String?           @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programEnrollmentId])
+}
+
+// One row per scoring rule that matched when `HousingStabilityScoringService`
+// scored an assessment — the audit trail that makes "score equals the sum of
+// persisted contributions" provable rather than merely claimed.
+model AssessmentScoreContribution {
+  id           String     @id @default(uuid())
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  field        String
+  value        String?
+  contribution Int
+
+  createdAt DateTime @default(now())
+
+  @@index([assessmentId])
+}
+
+// Configurable, seeded rule set for `HousingStabilityScoringService` —
+// replaces the deleted `scoring.service.ts`'s fixed-weight tally. A rule
+// matches an assessment's `field` by an exact `matchValue` or by the field's
+// numeric value falling inside [`rangeMin`, `rangeMax`], contributing
+// `contribution` points when it matches. PROVISIONAL seed values — see
+// design.md's Open Questions; not a clinically validated weight set.
+model ScoringRule {
+  id           String   @id @default(uuid())
+  field        String
+  matchValue   String?
+  rangeMin     Decimal? @db.Decimal(10, 2)
+  rangeMax     Decimal? @db.Decimal(10, 2)
+  contribution Int
+  isActive     Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([field])
+}
+
+// Maps a score band or field condition to a recommended `CarePlanTemplate` —
+// replaces `getRecommendedCarePlanTemplates`' old "every published template"
+// behavior (design.md Decision 5). Evaluated against an enrollment's latest
+// completed, scored assessment; falls back to all published templates when
+// none is scored yet.
+model CarePlanTemplateRule {
+  id             String           @id @default(uuid())
+  templateId     String
+  template       CarePlanTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  scoreBandMin   Int?
+  scoreBandMax   Int?
+  fieldCondition String?
+  priority       Int              @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([templateId])
+}
+
+// Configurable Coordinated Entry question bank — replaces the fixed
+// placeholder form in `Step1VulnerabilityAssessment.tsx`. Seeded with 5
+// active questions, clearly marked as demo configuration (design.md Decision
+// 6); `weightNote` is documentation only, not consumed by the scoring engine.
+model CeQuestion {
+  id                 String  @id @default(uuid())
+  text               String
+  clientFacingPrompt String? @db.Text
+  sequence           Int     @default(0)
+  isActive           Boolean @default(true)
+  weightNote         String? @db.Text
+
+  answerOptions        CeAnswerOption[]
+  responses            CeResponse[]
+  flagOverrideTriggers CeFlagOverride[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sequence])
+}
+
+model CeAnswerOption {
+  id         String     @id @default(uuid())
+  questionId String
+  question   CeQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  score      Int
+
+  responses CeResponse[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([questionId])
+}
+
+// The band whose [minScore, maxScore] range (inclusive at both ends) contains
+// a `CeAssessment`'s total score sets its priority tier and base recommended
+// project types (`recommendedProjectTypeCodes`, matched against
+// `Program.projectTypeCode`). Seeded with 3 bands, demo configuration.
+model CeScoreBand {
+  id                          String  @id @default(uuid())
+  name                        String
+  minScore                    Int
+  maxScore                    Int
+  description                 String? @db.Text
+  badgeColor                  String?
+  recommendedProjectTypeCodes String
+
+  assessments CeAssessment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Applied by `CoordinatedEntryService` in a fixed evaluation order — Safety
+// Alert, then Veteran, then Unaccompanied Youth (design.md Decision 6) — when
+// `flag` is set on a `CeAssessment` (and, if `triggerQuestionId` is set, that
+// question's answered score is >= `triggerMinScore`). `behavior: "replace"`
+// replaces the working recommended-project-types list; `"add"` appends to it.
+// A triggered Safety Alert override additionally suppresses the referral
+// action and surfaces `externalReferralMessage` in its place. One seeded row
+// per flag, demo configuration.
+model CeFlagOverride {
+  id                      String      @id @default(uuid())
+  flag                    String
+  triggerQuestionId       String?
+  triggerQuestion         CeQuestion? @relation(fields: [triggerQuestionId], references: [id])
+  triggerMinScore         Int?
+  behavior                String
+  externalReferralMessage String?     @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Audit trail for every CRUD write to the CE rule tables (questions, answer
+// options, score bands, flag overrides), gated by the `ce:manage-rules`
+// permission — see design.md Decision 8. `ruleTable`/`ruleId` identify which
+// row changed since the four rule tables share one audit log.
+model CeRuleChange {
+  id        String   @id @default(uuid())
+  ruleTable String
+  ruleId    String
+  actorId   Int
+  actor     User     @relation(fields: [actorId], references: [id])
+  before    Json?
+  after     Json?
+  changedAt DateTime @default(now())
+
+  @@index([ruleTable, ruleId])
+}
+
+// Coordinated Entry's screening record. Replaces `VulnerabilityAssessment`
+// entirely, dropped rather than kept alongside — this is a demo app with no
+// production data, and keeping both would create two parallel "vulnerability
+// assessment" concepts (design.md Decision 6, deliberately BREAKING). `flags`
+// is a Json array of the fixed intake flags (veteran/unaccompaniedYouth/
+// safetyAlert) set for this assessment; individual question answers live in
+// `CeResponse`, not in a free-form Json bag.
+model CeAssessment {
+  id           String       @id @default(uuid())
   clientId     String
-  client       Client    @relation(fields: [clientId], references: [id])
-  answers      Json
-  score        Int
-  priorityTier String
-  safetyAlert  Boolean   @default(false)
+  client       Client       @relation(fields: [clientId], references: [id])
   assessedById Int
-  assessedBy   User      @relation(fields: [assessedById], references: [id])
-  referralId   String?   @unique
-  referral     Referral? @relation(fields: [referralId], references: [id])
+  assessedBy   User         @relation(fields: [assessedById], references: [id])
+  assessedAt   DateTime     @default(now())
+  totalScore   Int
+  bandId       String?
+  band         CeScoreBand? @relation(fields: [bandId], references: [id])
+  flags        Json
+
+  responses  CeResponse[]
+  referralId String?      @unique
+  referral   Referral?    @relation(fields: [referralId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([clientId])
+}
+
+model CeResponse {
+  id             String         @id @default(uuid())
+  ceAssessmentId String
+  ceAssessment   CeAssessment   @relation(fields: [ceAssessmentId], references: [id], onDelete: Cascade)
+  questionId     String
+  question       CeQuestion     @relation(fields: [questionId], references: [id])
+  answerOptionId String
+  answerOption   CeAnswerOption @relation(fields: [answerOptionId], references: [id])
+  score          Int
+
+  @@index([ceAssessmentId])
 }
 
 // Pulled forward from the Services tab's migration (originally planned for
