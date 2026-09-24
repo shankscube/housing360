@@ -86,6 +86,87 @@ function addDays(date: Date, days: number): Date {
   return next;
 }
 
+const TASK_LIST_INCLUDE = {
+  owner: { select: { id: true, firstName: true, lastName: true } },
+  client: { select: { firstName: true, lastName: true } },
+} satisfies Prisma.TaskInclude;
+
+export type TaskListRow = Prisma.TaskGetPayload<{ include: typeof TASK_LIST_INCLUDE }>;
+
+export type TaskListFilter = 'all' | 'due_today' | 'overdue' | 'upcoming';
+
+export interface FindTasksParams {
+  filter: TaskListFilter;
+  search?: string;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * `due_today`/`overdue` exclude completed tasks (a completed task isn't
+ * "due" anymore); `upcoming` deliberately doesn't per the task-management
+ * spec — just a future due date, completed or not.
+ */
+function taskFilterWhere(filter: TaskListFilter): Prisma.TaskWhereInput {
+  const todayStart = startOfDay(new Date());
+  const todayEnd = addDays(todayStart, 1);
+  switch (filter) {
+    case 'due_today':
+      return { status: { not: 'completed' }, dueDate: { gte: todayStart, lt: todayEnd } };
+    case 'overdue':
+      return { status: { not: 'completed' }, dueDate: { lt: todayStart } };
+    case 'upcoming':
+      return { dueDate: { gte: todayEnd } };
+    case 'all':
+    default:
+      return {};
+  }
+}
+
+/**
+ * The Tasks page's filtered/searchable list — single-select `filter` ANDed
+ * with `search` (never a second filter), matching the same contract as
+ * `case.model.ts`'s `findCases`/`client.model.ts`'s `findClients`. `search`
+ * matches the task subject or the owner's first/last name.
+ */
+export async function findTasks({
+  filter,
+  search,
+  page,
+  pageSize,
+}: FindTasksParams): Promise<{ rows: TaskListRow[]; total: number }> {
+  const where: Prisma.TaskWhereInput = {
+    AND: [
+      taskFilterWhere(filter),
+      search
+        ? {
+            OR: [
+              { subject: { contains: search } },
+              {
+                owner: {
+                  is: { OR: [{ firstName: { contains: search } }, { lastName: { contains: search } }] },
+                },
+              },
+            ],
+          }
+        : {},
+    ],
+  };
+
+  const [rows, total] = await Promise.all([
+    prisma.task.findMany({
+      where,
+      include: TASK_LIST_INCLUDE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      orderBy: { dueDate: 'asc' },
+    }),
+    prisma.task.count({ where }),
+  ]);
+
+  return { rows, total };
+}
+
 /**
  * Home dashboard's "Tasks Due Today" KPI — strictly today's due date, not
  * including already-overdue tasks (home-dashboard design.md Decision 2).

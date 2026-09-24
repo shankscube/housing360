@@ -9,6 +9,11 @@ import intakeReducer from './slices/intakeSlice';
 import carePlansReducer from './slices/carePlansSlice';
 import referralsReducer from './slices/referralsSlice';
 import servicesReducer from './slices/servicesSlice';
+import searchReducer from './slices/searchSlice';
+import notificationsReducer from './slices/notificationsSlice';
+import tasksReducer from './slices/tasksSlice';
+import calendarReducer from './slices/calendarSlice';
+import recentActivityReducer from './slices/recentActivitySlice';
 
 export const store = configureStore({
   reducer: {
@@ -22,6 +27,11 @@ export const store = configureStore({
     carePlans: carePlansReducer,
     referrals: referralsReducer,
     services: servicesReducer,
+    search: searchReducer,
+    notifications: notificationsReducer,
+    tasks: tasksReducer,
+    calendar: calendarReducer,
+    recentActivity: recentActivityReducer,
   },
 });
 

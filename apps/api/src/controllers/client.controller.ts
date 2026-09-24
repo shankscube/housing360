@@ -69,7 +69,7 @@ export async function getClientHandler(req: Request, res: Response, next: NextFu
     if (!id) {
       throw new AppError(400, 'Client id is required');
     }
-    const client = await getClientById(id);
+    const client = await getClientById(id, req.user?.id);
     sendSuccess(res, { code: 200, message: 'Client retrieved', data: client });
   } catch (err) {
     next(err);
@@ -107,7 +107,7 @@ export async function createClientHandler(req: Request, res: Response, next: Nex
     // The duplicate-check path is no longer a branch here — it's a thrown
     // 409 the errorHandler middleware turns into a response (see `next(err)`
     // below). Success is always a plain created `Client`, 201.
-    const client = await createClient(input as ClientIntakeInput);
+    const client = await createClient(input as ClientIntakeInput, req.user?.id);
     sendSuccess(res, { code: 201, message: 'Client created', data: client });
   } catch (err) {
     next(err);
@@ -121,7 +121,7 @@ export async function updateClientHandler(req: Request, res: Response, next: Nex
       throw new AppError(400, 'Client id is required');
     }
     const input = req.body as ClientUpdateInput;
-    const client = await updateClient(id, input);
+    const client = await updateClient(id, input, req.user?.id);
     sendSuccess(res, { code: 200, message: 'Client updated', data: client });
   } catch (err) {
     next(err);

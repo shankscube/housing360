@@ -1,3 +1,6 @@
+import type { AppointmentItem } from './appointments';
+import type { RecentActivityItem } from './activity';
+
 export interface HomeKpiTile {
   value: number;
   subLine: string;
@@ -36,8 +39,14 @@ export interface HomeDashboardResponse {
   todaysTasks: HomeTaskItem[];
   /** PROVISIONAL — see `HomeDataQualityAlertItem`. */
   dataQualityAlerts: HomeDataQualityAlertItem[];
-  /** Always empty — Today's Appointments has no backing data source yet. */
-  todaysAppointments: [];
-  /** Always empty — Recently Assessed has no backing data source yet. */
-  recentlyAssessed: [];
+  /** Cases the requesting case manager manages with a follow-up due today — see `AppointmentItem` (appointments.ts). */
+  todaysAppointments: AppointmentItem[];
+  /**
+   * The requesting user's 5 newest distinct-record activity items (client,
+   * case, referral, or assessment) — see `RecentActivityItem` (activity.ts).
+   * Renamed from the `home-dashboard`-era `recentlyAssessed` (which was
+   * always `[]`) now that this panel covers every record type, not just
+   * assessments — see `home-workspace` design.md Decision 6.
+   */
+  recentlyAccessed: RecentActivityItem[];
 }

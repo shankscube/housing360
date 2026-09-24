@@ -32,6 +32,7 @@ import {
 import { findDisabilitiesByAssessmentId } from '../models/disability.model';
 import { scoreAssessment as computeHousingStabilityScore } from './housingStabilityScoring.service';
 import { assessmentTypeToStage, stageToAssessmentType } from '../constants/assessmentTypes';
+import { recordActivity } from './recordActivity.service';
 import { AppError } from '../utils/AppError';
 
 const ENTRY_STAGE = 1;
@@ -240,6 +241,7 @@ export async function createOrUpsertAssessment(
     exitWrite
   );
 
+  recordActivity(assessorId, 'assessment', row.id, 'modified');
   return toAssessment(row);
 }
 
@@ -264,10 +266,13 @@ export async function listAssessments(query: AssessmentListQuery): Promise<Asses
 /** `GET /api/assessments/:id` — score/scoreLabel/contributions/disabilities
  * included for the detail view; score fields are `null` until the assessment
  * reaches `completed`. */
-export async function getAssessmentDetail(id: string): Promise<AssessmentDetail> {
+export async function getAssessmentDetail(id: string, requestingUserId?: number): Promise<AssessmentDetail> {
   const row = await findAssessmentDetailById(id);
   if (!row) {
     throw new AppError(404, 'Assessment not found');
+  }
+  if (requestingUserId !== undefined) {
+    recordActivity(requestingUserId, 'assessment', id, 'viewed');
   }
   return toAssessmentDetail(row);
 }
@@ -401,5 +406,6 @@ export async function patchAssessment(
     exitWrite
   );
 
+  recordActivity(assessorId, 'assessment', id, 'modified');
   return toAssessment(row);
 }

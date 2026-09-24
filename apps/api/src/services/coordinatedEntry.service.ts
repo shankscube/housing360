@@ -27,6 +27,8 @@ import { countAvailableBeds } from '../models/bed.model';
 import { createReferral } from '../models/referral.model';
 import { toReferral } from '../models/referral.mapper';
 import { findFirstPartnerOrganization } from '../models/organization.model';
+import { insertReferralStatusEvent } from '../models/referralStatusEvent.model';
+import { recordActivity } from './recordActivity.service';
 import { AppError } from '../utils/AppError';
 
 function normalizeFlags(flags: Partial<CeAssessmentFlags> | undefined): CeAssessmentFlags {
@@ -241,7 +243,7 @@ export async function getPriorityQueue(query: PriorityQueueQuery): Promise<Prior
  * "provider case manager" is the free-text `Referral.providerContact` field
  * (there's no FK for this anywhere else in the schema either).
  */
-export async function createCeReferral(input: CeReferralInput): Promise<Referral> {
+export async function createCeReferral(input: CeReferralInput, requestingUserId: number): Promise<Referral> {
   if (!input?.ceAssessmentId) {
     throw new AppError(400, 'ceAssessmentId is required');
   }
@@ -256,6 +258,7 @@ export async function createCeReferral(input: CeReferralInput): Promise<Referral
 
   const referrerOrg = await findFirstPartnerOrganization();
 
+  const initialStatus = 'new';
   const row = await createReferral({
     title: 'Coordinated Entry Referral',
     clientId: ceAssessment.clientId,
@@ -263,11 +266,13 @@ export async function createCeReferral(input: CeReferralInput): Promise<Referral
     providerOrgId: input.providerOrgId ?? null,
     referrerOrgId: referrerOrg?.id ?? null,
     providerContact: input.providerContact ?? null,
-    status: 'new',
+    status: initialStatus,
     isExternal: true,
   });
 
   await attachReferralToCeAssessment(ceAssessment.id, row.id);
+  await insertReferralStatusEvent(row.id, null, initialStatus, requestingUserId);
+  recordActivity(requestingUserId, 'referral', row.id, 'modified');
 
   return toReferral(row);
 }

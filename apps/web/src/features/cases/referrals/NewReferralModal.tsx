@@ -10,7 +10,14 @@ import { fieldWrapClass, formActionsClass, formGridClass, inputClass, labelClass
 export interface NewReferralModalProps {
   isOpen: boolean;
   onClose: () => void;
-  caseId: string;
+  /**
+   * Optional so this modal can be opened with no case yet (Home's "New
+   * Referral" quick action) — `Referral.caseId` is already nullable and
+   * `case.service.ts`'s `attachOrphanReferralsToCase` backfills a case-less
+   * referral onto a case the moment one opens for that client, same as
+   * Coordinated Entry's own referral flow (home-workspace design.md Decision 4).
+   */
+  caseId?: string;
   existingReferral?: Referral | null;
 }
 
@@ -105,7 +112,9 @@ export function NewReferralModal({ isOpen, onClose, caseId, existingReferral }: 
     setIsSaving(false);
     if (createReferral.fulfilled.match(result)) {
       showToast('Referral created.', 'success');
-      dispatch(fetchCaseReferrals(caseId));
+      if (caseId) {
+        dispatch(fetchCaseReferrals(caseId));
+      }
       onClose();
     } else {
       showToast('Failed to create the referral. Please try again.');

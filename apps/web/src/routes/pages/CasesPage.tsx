@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { CaseFilter, CaseListItem, CaseTrend } from '@housing360/types';
 import { ContentAreaTemplate } from '../../components/layout/ContentAreaTemplate';
 import {
@@ -53,12 +53,23 @@ function trendSubLine(trend: CaseTrend): string {
 export function CasesPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { items, status, filter, search, page, pageSize, total, kpis } = useAppSelector(
     (state) => state.cases.list
   );
 
   const [searchInput, setSearchInput] = useState(search);
   const [showNewCaseModal, setShowNewCaseModal] = useState(false);
+
+  // Home's KPI tiles deep-link here with a pre-applied filter (e.g.
+  // `?filter=myCaseload`) — read once on mount, per home-workspace design.md.
+  useEffect(() => {
+    const requestedFilter = searchParams.get('filter');
+    if (requestedFilter && FILTER_OPTIONS.some((option) => option.value === requestedFilter)) {
+      dispatch(setListFilter(requestedFilter as CaseFilter));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const handle = setTimeout(() => {

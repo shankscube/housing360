@@ -1,15 +1,33 @@
-import type { Task, TaskCreateInput, TaskUpdateInput } from '@housing360/types';
+import type { Task, TaskCreateInput, TaskListQuery, TaskListResult, TaskUpdateInput } from '@housing360/types';
 import {
   createTask as createTaskRow,
   findTaskById,
+  findTasks,
   findTasksByCase,
   findTasksByGoalAssignment,
   findTasksByInteractionSummary,
   updateTask as updateTaskRow,
   updateTaskStatus as updateTaskStatusRow,
 } from '../models/task.model';
-import { toTask } from '../models/task.mapper';
+import { toTask, toTaskListItem } from '../models/task.mapper';
 import { AppError } from '../utils/AppError';
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+
+/** Same pattern as `case.service.ts`'s `normalizePagination`. */
+function normalizePagination(query: TaskListQuery): { page: number; pageSize: number } {
+  const page =
+    query.page !== undefined && Number.isFinite(query.page) && query.page > 0
+      ? Math.floor(query.page)
+      : DEFAULT_PAGE;
+  const pageSize =
+    query.pageSize !== undefined && Number.isFinite(query.pageSize) && query.pageSize > 0
+      ? Math.min(Math.floor(query.pageSize), MAX_PAGE_SIZE)
+      : DEFAULT_PAGE_SIZE;
+  return { page, pageSize };
+}
 
 export async function listTasksByCase(caseId: string): Promise<Task[]> {
   const rows = await findTasksByCase(caseId);
@@ -74,5 +92,26 @@ export async function updateTaskStatus(id: string, status: string): Promise<Task
     throw new AppError(404, 'Task not found');
   }
   const row = await updateTaskStatusRow(id, status);
+  return toTask(row);
+}
+
+/** The Tasks page's filtered/searchable list (task-management spec). */
+export async function listTasks(query: TaskListQuery): Promise<TaskListResult> {
+  const { page, pageSize } = normalizePagination(query);
+  const { rows, total } = await findTasks({
+    filter: query.filter ?? 'all',
+    search: query.search,
+    page,
+    pageSize,
+  });
+  return { items: rows.map(toTaskListItem), total, page, pageSize };
+}
+
+/** The Tasks page's detail view. */
+export async function getTask(id: string): Promise<Task> {
+  const row = await findTaskById(id);
+  if (!row) {
+    throw new AppError(404, 'Task not found');
+  }
   return toTask(row);
 }

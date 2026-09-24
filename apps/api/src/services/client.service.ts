@@ -36,6 +36,7 @@ import { findAssessmentByEnrollmentAndStage, type AssessmentRow } from '../model
 import { findDisabilitiesByAssessmentId } from '../models/disability.model';
 import { toDisability } from '../models/disability.mapper';
 import { hashSsn } from '../utils/ssn';
+import { recordActivity } from './recordActivity.service';
 import { AppError } from '../utils/AppError';
 
 const ENTRY_STAGE = 1;
@@ -67,10 +68,13 @@ export async function listClients(query: ClientListQuery): Promise<ClientListRes
   return { items, total, page, pageSize };
 }
 
-export async function getClientById(id: string): Promise<Client> {
+export async function getClientById(id: string, requestingUserId?: number): Promise<Client> {
   const row = await findClientById(id);
   if (!row) {
     throw new AppError(404, 'Client not found');
+  }
+  if (requestingUserId !== undefined) {
+    recordActivity(requestingUserId, 'client', id, 'viewed');
   }
   return toClient(row);
 }
@@ -80,7 +84,7 @@ export async function searchClients(name: string): Promise<ClientSearchResultIte
   return rows.map(toClientSearchResultItem);
 }
 
-export async function createClient(input: ClientIntakeInput): Promise<Client> {
+export async function createClient(input: ClientIntakeInput, requestingUserId?: number): Promise<Client> {
   // A duplicate can only be matched on name + DOB + SSN hash when both DOB
   // and SSN are actual disclosed values — a withheld field can't be compared.
   const canCheckDuplicates = input.ssn.status === 'provided' && input.dob.status === 'provided';
@@ -136,10 +140,17 @@ export async function createClient(input: ClientIntakeInput): Promise<Client> {
     relationshipToHoh: input.relationshipToHoh ?? null,
   });
 
+  if (requestingUserId !== undefined) {
+    recordActivity(requestingUserId, 'client', row.id, 'modified');
+  }
   return toClient(row);
 }
 
-export async function updateClient(id: string, input: ClientUpdateInput): Promise<Client> {
+export async function updateClient(
+  id: string,
+  input: ClientUpdateInput,
+  requestingUserId?: number
+): Promise<Client> {
   const existing = await findClientById(id);
   if (!existing) {
     throw new AppError(404, 'Client not found');
@@ -224,6 +235,9 @@ export async function updateClient(id: string, input: ClientUpdateInput): Promis
   }
 
   const row = await updateClientRow(id, data);
+  if (requestingUserId !== undefined) {
+    recordActivity(requestingUserId, 'client', id, 'modified');
+  }
   return toClient(row);
 }
 

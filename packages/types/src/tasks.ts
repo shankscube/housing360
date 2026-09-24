@@ -46,3 +46,25 @@ export interface TaskUpdateInput {
   dueDate?: string | null;
   ownerId?: number | null;
 }
+
+/** Single-select filter for the Tasks page's `GET /api/tasks` list — combines with `search`, never with another filter value. */
+export type TaskFilter = 'all' | 'due_today' | 'overdue' | 'upcoming';
+
+/** A task list row plus the client's display name (`ownerName` is already on `Task`). */
+export interface TaskListItem extends Task {
+  clientName: string;
+}
+
+export interface TaskListQuery {
+  filter?: TaskFilter;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface TaskListResult {
+  items: TaskListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

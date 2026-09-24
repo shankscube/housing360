@@ -116,7 +116,7 @@ export async function getAssessmentDetailHandler(req: Request, res: Response, ne
     if (!id) {
       throw new AppError(400, 'Assessment id is required');
     }
-    const assessment = await getAssessmentDetail(id);
+    const assessment = await getAssessmentDetail(id, req.user?.id);
     sendSuccess(res, { code: 200, message: 'Assessment retrieved', data: assessment });
   } catch (err) {
     next(err);

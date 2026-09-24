@@ -18,11 +18,14 @@ import { AppError } from '../utils/AppError';
 
 export async function createExternalReferralHandler(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!req.user) {
+      throw new AppError(401, 'Not authenticated');
+    }
     const input = req.body as Partial<ExternalReferralInput> | undefined;
     if (!input?.caseId || !input.providerOrgId) {
       throw new AppError(400, 'caseId and providerOrgId are required');
     }
-    const referral = await createExternalReferral(input as ExternalReferralInput);
+    const referral = await createExternalReferral(input as ExternalReferralInput, req.user.id);
     sendSuccess(res, { code: 201, message: 'Referral sent', data: referral });
   } catch (err) {
     next(err);
@@ -42,11 +45,14 @@ export async function listCaseReferralsHandler(req: Request, res: Response, next
 
 export async function createReferralHandler(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!req.user) {
+      throw new AppError(401, 'Not authenticated');
+    }
     const input = req.body as Partial<ReferralInput> | undefined;
     if (!input?.title || !input.clientId) {
       throw new AppError(400, 'title and clientId are required');
     }
-    const referral = await createInternalReferral(input as ReferralInput);
+    const referral = await createInternalReferral(input as ReferralInput, req.user.id);
     sendSuccess(res, { code: 201, message: 'Referral created', data: referral });
   } catch (err) {
     next(err);
@@ -55,10 +61,13 @@ export async function createReferralHandler(req: Request, res: Response, next: N
 
 export async function updateReferralHandler(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!req.user) {
+      throw new AppError(401, 'Not authenticated');
+    }
     const { id } = req.params;
     if (!id) throw new AppError(400, 'Referral id is required');
     const input = req.body as ReferralUpdateInput;
-    const referral = await updateReferral(id, input);
+    const referral = await updateReferral(id, input, req.user.id);
     sendSuccess(res, { code: 200, message: 'Referral updated', data: referral });
   } catch (err) {
     next(err);
@@ -67,9 +76,12 @@ export async function updateReferralHandler(req: Request, res: Response, next: N
 
 export async function acceptReferralHandler(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!req.user) {
+      throw new AppError(401, 'Not authenticated');
+    }
     const { id } = req.params;
     if (!id) throw new AppError(400, 'Referral id is required');
-    const referral = await acceptReferral(id);
+    const referral = await acceptReferral(id, req.user.id);
     sendSuccess(res, { code: 200, message: 'Referral accepted', data: referral });
   } catch (err) {
     next(err);
@@ -78,10 +90,13 @@ export async function acceptReferralHandler(req: Request, res: Response, next: N
 
 export async function declineReferralHandler(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!req.user) {
+      throw new AppError(401, 'Not authenticated');
+    }
     const { id } = req.params;
     if (!id) throw new AppError(400, 'Referral id is required');
     const input = (req.body as Partial<ReferralDeclineInput> | undefined) ?? {};
-    const referral = await declineReferral(id, input as ReferralDeclineInput);
+    const referral = await declineReferral(id, input as ReferralDeclineInput, req.user.id);
     sendSuccess(res, { code: 200, message: 'Referral declined', data: referral });
   } catch (err) {
     next(err);

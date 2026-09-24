@@ -35,6 +35,8 @@ model User {
   assessedAssessments   Assessment[]
   assessedCeAssessments CeAssessment[]
   ceRuleChanges         CeRuleChange[]
+  referralStatusEvents  ReferralStatusEvent[]
+  recordActivity        RecordActivity[]
 }
 
 enum Sex {
@@ -731,6 +733,7 @@ model Referral {
 
   originatingForCases     Case[]        @relation("CaseOriginatingReferral")
   originatingCeAssessment CeAssessment?
+  statusEvents            ReferralStatusEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -738,6 +741,45 @@ model Referral {
   @@index([clientId])
   @@index([caseId])
   @@index([providerOrgId])
+}
+
+// `home-workspace` — one row per referral status transition, including
+// creation itself (`fromStatus: null`). This doubles as the only way to
+// answer "who sent this referral" (the `changedBy` of the row with the
+// earliest `changedAt`) without a new column on `Referral` — see design.md
+// Decision 2.
+model ReferralStatusEvent {
+  id               String    @id @default(uuid())
+  referralId       String
+  referral         Referral  @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  fromStatus       String?
+  toStatus         String
+  changedById      Int?
+  changedBy        User?     @relation(fields: [changedById], references: [id])
+  changedAt        DateTime  @default(now())
+  seenByReferrerAt DateTime?
+
+  @@index([referralId])
+  @@index([changedById])
+}
+
+// `home-workspace` — a generic, service-written view/modify log across
+// Clients, Cases, Referrals, and Assessments, feeding the Home screen's
+// Recently Accessed panel and the Recently Modified page. Append-only; reads
+// deduplicate to the latest row per (recordType, recordId) — see design.md
+// Decision 1. `recordId` is a plain String rather than a per-type FK since it
+// points at four different tables.
+model RecordActivity {
+  id         String   @id @default(uuid())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  recordType String
+  recordId   String
+  action     String
+  at         DateTime @default(now())
+
+  @@index([userId])
+  @@index([recordType, recordId])
 }
 
 // Created when an Exit-stage assessment completes, in the same transaction

@@ -81,7 +81,7 @@ export async function getCaseHandler(req: Request, res: Response, next: NextFunc
     if (!id) {
       throw new AppError(400, 'Case id is required');
     }
-    const caseDetail = await getCaseById(id);
+    const caseDetail = await getCaseById(id, req.user?.id);
     sendSuccess(res, { code: 200, message: 'Case retrieved', data: caseDetail });
   } catch (err) {
     next(err);

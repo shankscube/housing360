@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { AssessmentFilter, AssessmentListItem, AssessmentTypeFilter } from '@housing360/types';
 import { ContentAreaTemplate } from '../../components/layout/ContentAreaTemplate';
 import { Button, ConfirmDialog, DataTable, FilterChipRow, Icon, StatusBadge, useToast, type DataTableColumn } from '../../components/ui';
@@ -49,6 +49,7 @@ type FormModalState =
 export function AssessmentCommandCenterPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showToast } = useToast();
   const { items, status, filter, typeFilter, search, page, pageSize, total, kpis } = useAppSelector(
     (state) => state.assessments.list
@@ -58,6 +59,15 @@ export function AssessmentCommandCenterPage() {
   const [showLaunchModal, setShowLaunchModal] = useState(false);
   const [formModal, setFormModal] = useState<FormModalState | null>(null);
   const [discardTargetId, setDiscardTargetId] = useState<string | null>(null);
+
+  // Home's Assessments Due KPI tile deep-links here with `?filter=dueToday`.
+  useEffect(() => {
+    const requestedFilter = searchParams.get('filter');
+    if (requestedFilter && STATUS_FILTER_OPTIONS.some((option) => option.value === requestedFilter)) {
+      dispatch(setListFilter(requestedFilter as AssessmentFilter));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const handle = setTimeout(() => {

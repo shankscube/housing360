@@ -305,3 +305,35 @@ export interface CaseFollowUpData {
 export function updateCaseFollowUp(id: string, data: CaseFollowUpData): Promise<CaseListRow> {
   return prisma.case.update({ where: { id }, data, include: LIST_INCLUDE });
 }
+
+const APPOINTMENT_SELECT = {
+  id: true,
+  caseNumber: true,
+  followUpMilestone: true,
+  followUpDueDate: true,
+  client: { select: { firstName: true, lastName: true } },
+} satisfies Prisma.CaseSelect;
+
+export type AppointmentRow = Prisma.CaseGetPayload<{ select: typeof APPOINTMENT_SELECT }>;
+
+/**
+ * Calendar/Home "Appointments" — a read over `Case.followUpMilestone`/
+ * `followUpDueDate`, not a dedicated appointment table (home-workspace
+ * task-management spec). `to` is exclusive, matching this file's other
+ * range queries (`dueTodayWhere` etc).
+ */
+export function findFollowUpsInRange(
+  from: Date,
+  to: Date,
+  assignedCaseManagerId?: number,
+): Promise<AppointmentRow[]> {
+  return prisma.case.findMany({
+    where: {
+      followUpMilestone: { not: 'none' },
+      followUpDueDate: { gte: from, lt: to },
+      ...(assignedCaseManagerId !== undefined ? { assignedCaseManagerId } : {}),
+    },
+    select: APPOINTMENT_SELECT,
+    orderBy: { followUpDueDate: 'asc' },
+  });
+}

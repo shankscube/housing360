@@ -17,15 +17,17 @@ export interface KpiTileProps {
   subLine?: string;
   /** Optional leading dot, in the shared tone palette. */
   tone?: StatusTone;
+  /** Makes the tile clickable (e.g. Home's KPI tiles navigating to their matching filtered list) — omit for a plain, non-interactive tile. */
+  onClick?: () => void;
 }
 
 /**
  * A single KPI tile. Sized with `flex-1` so any number of tiles placed in a
  * flex row (4, 5, or otherwise) share the row evenly without a fixed layout.
  */
-export function KpiTile({ value, label, subLine, tone }: KpiTileProps) {
-  return (
-    <div className="min-w-kpiMinWidth flex-1 rounded-2xl bg-surface px-10 py-9 shadow-card">
+export function KpiTile({ value, label, subLine, tone, onClick }: KpiTileProps) {
+  const content = (
+    <>
       <div className="flex items-center gap-3">
         {tone ? (
           <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full ${DOT_COLOR_CLASS[tone]}`} />
@@ -38,6 +40,24 @@ export function KpiTile({ value, label, subLine, tone }: KpiTileProps) {
         {value}
       </div>
       {subLine ? <div className="mt-2.5 text-sm text-textMuted">{subLine}</div> : null}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="min-w-kpiMinWidth flex-1 rounded-2xl bg-surface px-10 py-9 text-left shadow-card transition-shadow hover:shadow-lifted"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="min-w-kpiMinWidth flex-1 rounded-2xl bg-surface px-10 py-9 shadow-card">
+      {content}
     </div>
   );
 }

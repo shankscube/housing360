@@ -41,6 +41,7 @@ import {
   HUD_WORKSPACE_DISCLOSURE_TEXT,
   type HudDataChecklistContext,
 } from '../constants/hudDataChecklist';
+import { recordActivity } from './recordActivity.service';
 import { AppError } from '../utils/AppError';
 
 const ENTRY_STAGE = 1;
@@ -147,10 +148,13 @@ async function computeTabsWithContent(row: CaseListRow): Promise<CaseTabsWithCon
   };
 }
 
-export async function getCaseById(id: string): Promise<CaseDetail> {
+export async function getCaseById(id: string, requestingUserId?: number): Promise<CaseDetail> {
   const row = await findCaseById(id);
   if (!row) {
     throw new AppError(404, 'Case not found');
+  }
+  if (requestingUserId !== undefined) {
+    recordActivity(requestingUserId, 'case', id, 'viewed');
   }
   const tabsWithContent = await computeTabsWithContent(row);
   return toCaseDetail(row, tabsWithContent);
@@ -200,6 +204,7 @@ export async function createCase(input: CaseCreateInput, requestingUserId: numbe
   });
 
   await attachOrphanReferralsToCase(input.clientId, row.id);
+  recordActivity(requestingUserId, 'case', row.id, 'modified');
 
   const tabsWithContent = await computeTabsWithContent(row);
   return toCaseDetail(row, tabsWithContent);
@@ -257,6 +262,7 @@ export async function updateCase(
   }
 
   const row = await updateCaseRow(id, data);
+  recordActivity(requestingUserId, 'case', id, 'modified');
 
   const tabsWithContent = await computeTabsWithContent(row);
   return toCaseDetail(row, tabsWithContent);
@@ -287,6 +293,7 @@ export async function updateCaseFollowUp(
     followUpDueDate,
     updatedById: requestingUserId,
   });
+  recordActivity(requestingUserId, 'case', id, 'modified');
 
   const tabsWithContent = await computeTabsWithContent(row);
   return toCaseDetail(row, tabsWithContent);

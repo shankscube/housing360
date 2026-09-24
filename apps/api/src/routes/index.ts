@@ -21,6 +21,10 @@ import { healthWellnessRouter } from './healthWellness.routes';
 import { coordinatedEntryRouter } from './coordinatedEntry.routes';
 import { ceRuleAdminRouter } from './ceRuleAdmin.routes';
 import { dashboardRouter } from './dashboard.routes';
+import { searchRouter } from './search.routes';
+import { notificationsRouter } from './notifications.routes';
+import { appointmentRouter } from './appointment.routes';
+import { recentActivityRouter } from './recentActivity.routes';
 
 export const apiRouter = Router();
 
@@ -53,3 +57,7 @@ apiRouter.use('/api', healthWellnessRouter);
 apiRouter.use('/api', coordinatedEntryRouter);
 apiRouter.use('/api', ceRuleAdminRouter);
 apiRouter.use('/api/dashboard', dashboardRouter);
+apiRouter.use('/api', searchRouter);
+apiRouter.use('/api', notificationsRouter);
+apiRouter.use('/api', appointmentRouter);
+apiRouter.use('/api', recentActivityRouter);

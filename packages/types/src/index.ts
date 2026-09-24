@@ -20,3 +20,7 @@ export * from './hudOptions';
 export * from './intake';
 export * from './coordinatedEntry';
 export * from './dashboard';
+export * from './search';
+export * from './notifications';
+export * from './appointments';
+export * from './activity';

@@ -5,6 +5,11 @@ import { countOpenReferrals } from '../models/referral.model';
 import { countAssessmentsDueOrOverdue } from '../models/assessment.model';
 import { countTasksDueTodayForOwner, findTasksDueOrOverdueForOwner } from '../models/task.model';
 import { getDataQualityAlertsForHome } from './dataQualityIssue.service';
+import { listAppointments } from './appointment.service';
+import { listRecentActivityForHome } from './recentActivity.service';
+
+const HOME_APPOINTMENTS_LOOKAHEAD_DAYS = 1;
+const HOME_RECENTLY_ACCESSED_LIMIT = 5;
 
 function startOfCurrentMonth(): Date {
   const now = new Date();
@@ -30,18 +35,31 @@ export async function getHomeDashboard(
   requestingUserId: number,
   requestingUserFirstName: string
 ): Promise<HomeDashboardResponse> {
-  const [caseloadClientIds, openReferrals, assessmentsDue, tasksDueTodayCount, homeTasks, dataQualityAlerts] =
-    await Promise.all([
-      findActiveCaseloadClientIds(requestingUserId),
-      countOpenReferrals(),
-      countAssessmentsDueOrOverdue(),
-      countTasksDueTodayForOwner(requestingUserId),
-      findTasksDueOrOverdueForOwner(requestingUserId),
-      getDataQualityAlertsForHome(),
-    ]);
+  const todayStart = startOfDay(new Date());
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + HOME_APPOINTMENTS_LOOKAHEAD_DAYS);
+
+  const [
+    caseloadClientIds,
+    openReferrals,
+    assessmentsDue,
+    tasksDueTodayCount,
+    homeTasks,
+    dataQualityAlerts,
+    todaysAppointments,
+    recentlyAccessed,
+  ] = await Promise.all([
+    findActiveCaseloadClientIds(requestingUserId),
+    countOpenReferrals(),
+    countAssessmentsDueOrOverdue(),
+    countTasksDueTodayForOwner(requestingUserId),
+    findTasksDueOrOverdueForOwner(requestingUserId),
+    getDataQualityAlertsForHome(),
+    listAppointments(todayStart, todayEnd, requestingUserId),
+    listRecentActivityForHome(requestingUserId, HOME_RECENTLY_ACCESSED_LIMIT),
+  ]);
 
   const newThisMonth = await countClientsCreatedSince(caseloadClientIds, startOfCurrentMonth());
-  const todayStart = startOfDay(new Date());
   const assessmentsDueTotal = assessmentsDue.dueToday + assessmentsDue.overdue;
 
   return {
@@ -72,7 +90,7 @@ export async function getHomeDashboard(
       overdue: Boolean(task.dueDate && task.dueDate < todayStart),
     })),
     dataQualityAlerts,
-    todaysAppointments: [],
-    recentlyAssessed: [],
+    todaysAppointments,
+    recentlyAccessed,
   };
 }

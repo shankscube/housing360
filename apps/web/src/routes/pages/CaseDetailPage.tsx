@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import type { CaseTabKey } from '@housing360/types';
 import { ContentAreaTemplate } from '../../components/layout/ContentAreaTemplate';
 import { Tabs, ToastProvider } from '../../components/ui';
@@ -27,9 +27,15 @@ const TABS: { key: CaseTabKey; label: string }[] = [
 
 export function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const dispatch = useAppDispatch();
   const { case: caseDetail, status, error } = useAppSelector((state) => state.cases.detail);
-  const [activeTab, setActiveTab] = useState<CaseTabKey>('overview');
+  // Deep-links (search results, notifications, Today's Appointments) can open
+  // straight onto a specific tab via router state — see home-workspace
+  // design.md Decision 5. A plain link with no state still defaults to
+  // Overview, unchanged from before.
+  const initialTab = (location.state as { initialTab?: CaseTabKey } | null)?.initialTab ?? 'overview';
+  const [activeTab, setActiveTab] = useState<CaseTabKey>(initialTab);
   const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {

@@ -9,6 +9,9 @@ import { CaseDetailPage } from './pages/CaseDetailPage';
 import { AssessmentsPage } from './pages/AssessmentsPage';
 import { AssessmentDetailPage } from '../features/assessments/AssessmentDetailPage';
 import { CoordinatedEntryPage } from './pages/CoordinatedEntryPage';
+import { TasksPage } from '../features/tasks/TasksPage';
+import { CalendarPage } from '../features/calendar/CalendarPage';
+import { RecentlyModifiedPage } from '../features/activity/RecentlyModifiedPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 
 export function AppRoutes() {
@@ -24,6 +27,9 @@ export function AppRoutes() {
           <Route path="/assessments" element={<AssessmentsPage />} />
           <Route path="/assessments/:id" element={<AssessmentDetailPage />} />
           <Route path="/coordinated-entry" element={<CoordinatedEntryPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/recent" element={<RecentlyModifiedPage />} />
 
           <Route
             path="/resource-directory"

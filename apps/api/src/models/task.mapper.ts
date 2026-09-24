@@ -1,5 +1,5 @@
-import type { Task } from '@housing360/types';
-import type { TaskRow } from './task.model';
+import type { Task, TaskListItem } from '@housing360/types';
+import type { TaskListRow, TaskRow } from './task.model';
 
 export function toTask(row: TaskRow): Task {
   return {
@@ -18,5 +18,12 @@ export function toTask(row: TaskRow): Task {
     interactionSummaryId: row.interactionSummaryId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export function toTaskListItem(row: TaskListRow): TaskListItem {
+  return {
+    ...toTask(row),
+    clientName: `${row.client.firstName} ${row.client.lastName}`,
   };
 }

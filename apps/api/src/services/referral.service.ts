@@ -15,6 +15,8 @@ import { toReferral } from '../models/referral.mapper';
 import { getCaseById } from './case.service';
 import { findClientById } from '../models/client.model';
 import { getRoiStatus } from './releaseOfInformation.service';
+import { insertReferralStatusEvent } from '../models/referralStatusEvent.model';
+import { recordActivity } from './recordActivity.service';
 import { AppError } from '../utils/AppError';
 
 const DEFAULT_DECLINE_REASON = 'Client declined services';
@@ -24,10 +26,21 @@ export async function listReferralsByCase(caseId: string): Promise<Referral[]> {
   return rows.map(toReferral);
 }
 
-export async function createInternalReferral(input: ReferralInput): Promise<Referral> {
+/** `viewed` activity for a single referral — used wherever a referral's own detail is read directly (e.g. notification click-through). */
+export async function getReferralById(id: string, requestingUserId: number): Promise<Referral> {
+  const row = await findReferralById(id);
+  if (!row) {
+    throw new AppError(404, 'Referral not found');
+  }
+  recordActivity(requestingUserId, 'referral', id, 'viewed');
+  return toReferral(row);
+}
+
+export async function createInternalReferral(input: ReferralInput, requestingUserId: number): Promise<Referral> {
   if (!input.title || !input.title.trim() || !input.clientId) {
     throw new AppError(400, 'Title and Client are required to create a referral');
   }
+  const initialStatus = input.status ?? 'pending';
   const row = await createReferral({
     title: input.title.trim(),
     clientId: input.clientId,
@@ -37,7 +50,7 @@ export async function createInternalReferral(input: ReferralInput): Promise<Refe
     referrerOrgId: input.referrerOrgId ?? null,
     referralDate: input.referralDate ? new Date(input.referralDate) : undefined,
     type: input.type ?? null,
-    status: input.status ?? 'pending',
+    status: initialStatus,
     priority: input.priority ?? null,
     category: input.category ?? null,
     description: input.description ?? null,
@@ -45,10 +58,16 @@ export async function createInternalReferral(input: ReferralInput): Promise<Refe
     caseManagerComments: input.caseManagerComments ?? null,
     isExternal: false,
   });
+  await insertReferralStatusEvent(row.id, null, initialStatus, requestingUserId);
+  recordActivity(requestingUserId, 'referral', row.id, 'modified');
   return toReferral(row);
 }
 
-export async function updateReferral(id: string, input: ReferralUpdateInput): Promise<Referral> {
+export async function updateReferral(
+  id: string,
+  input: ReferralUpdateInput,
+  requestingUserId: number
+): Promise<Referral> {
   const existing = await findReferralById(id);
   if (!existing) {
     throw new AppError(404, 'Referral not found');
@@ -70,19 +89,29 @@ export async function updateReferral(id: string, input: ReferralUpdateInput): Pr
     comments: input.comments,
     caseManagerComments: input.caseManagerComments,
   });
+  if (input.status !== undefined && input.status !== existing.status) {
+    await insertReferralStatusEvent(id, existing.status, input.status, requestingUserId);
+  }
+  recordActivity(requestingUserId, 'referral', id, 'modified');
   return toReferral(row);
 }
 
-export async function acceptReferral(id: string): Promise<Referral> {
+export async function acceptReferral(id: string, requestingUserId: number): Promise<Referral> {
   const existing = await findReferralById(id);
   if (!existing) {
     throw new AppError(404, 'Referral not found');
   }
   const row = await updateReferralRow(id, { status: 'accepted' });
+  await insertReferralStatusEvent(id, existing.status, 'accepted', requestingUserId);
+  recordActivity(requestingUserId, 'referral', id, 'modified');
   return toReferral(row);
 }
 
-export async function declineReferral(id: string, input: ReferralDeclineInput): Promise<Referral> {
+export async function declineReferral(
+  id: string,
+  input: ReferralDeclineInput,
+  requestingUserId: number
+): Promise<Referral> {
   const existing = await findReferralById(id);
   if (!existing) {
     throw new AppError(404, 'Referral not found');
@@ -92,6 +121,8 @@ export async function declineReferral(id: string, input: ReferralDeclineInput): 
     declineReason: input.reason || DEFAULT_DECLINE_REASON,
     declineNotes: input.notes ?? null,
   });
+  await insertReferralStatusEvent(id, existing.status, 'declined', requestingUserId);
+  recordActivity(requestingUserId, 'referral', id, 'modified');
   return toReferral(row);
 }
 
@@ -105,7 +136,10 @@ function initials(firstName: string, lastName: string): string {
  * consent, the full client name is stored as `clientContact`; without it,
  * only initials are stored, regardless of what the request body claims.
  */
-export async function createExternalReferral(input: ExternalReferralInput): Promise<Referral> {
+export async function createExternalReferral(
+  input: ExternalReferralInput,
+  requestingUserId: number
+): Promise<Referral> {
   const caseDetail = await getCaseById(input.caseId);
   const client = await findClientById(caseDetail.clientId);
   if (!client) {
@@ -117,16 +151,19 @@ export async function createExternalReferral(input: ExternalReferralInput): Prom
     ? `${client.firstName} ${client.lastName}`
     : initials(client.firstName, client.lastName);
 
+  const initialStatus = 'pending';
   const row = await createReferral({
     title: `Partner referral — ${caseDetail.subject ?? caseDetail.caseNumber}`,
     clientId: caseDetail.clientId,
     caseId: input.caseId,
     providerOrgId: input.providerOrgId,
     isExternal: true,
-    status: 'pending',
+    status: initialStatus,
     clientContact,
     caseManagerComments: input.notes ?? null,
   });
 
+  await insertReferralStatusEvent(row.id, null, initialStatus, requestingUserId);
+  recordActivity(requestingUserId, 'referral', row.id, 'modified');
   return toReferral(row);
 }

@@ -105,11 +105,14 @@ export async function getRecommendedProgramsHandler(req: Request, res: Response,
 
 export async function createCeReferralHandler(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!req.user) {
+      throw new AppError(401, 'Not authenticated');
+    }
     const input = req.body as Partial<CeReferralInput> | undefined;
     if (!input?.ceAssessmentId) {
       throw new AppError(400, 'ceAssessmentId is required');
     }
-    const referral = await createCeReferral(input as CeReferralInput);
+    const referral = await createCeReferral(input as CeReferralInput, req.user.id);
     sendSuccess(res, { code: 201, message: 'Referral sent', data: referral });
   } catch (err) {
     next(err);
