@@ -1,9 +1,5 @@
-import { ContentAreaTemplate } from '../../components/layout/ContentAreaTemplate';
+import { AssessmentCommandCenterPage } from '../../features/assessments/AssessmentCommandCenterPage';
 
 export function AssessmentsPage() {
-  return (
-    <ContentAreaTemplate title="Assessments">
-      <p className="text-sm text-textMuted">Assessments screen content coming soon.</p>
-    </ContentAreaTemplate>
-  );
+  return <AssessmentCommandCenterPage />;
 }

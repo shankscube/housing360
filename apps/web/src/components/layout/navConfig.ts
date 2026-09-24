@@ -3,17 +3,23 @@ import type { IconName } from '../ui/icons';
 export interface NavItem {
   key: string;
   label: string;
-  /** Present when this item (or group header) itself navigates somewhere. */
-  to?: string;
   /**
-   * The bundle draws an icon on every top-level item and none on nested
-   * items, so this is optional rather than required.
+   * Navigation target for a leaf item. Group headers (items with `children`)
+   * never set this — they're pure expand/collapse toggles, never a route.
    */
-  icon?: IconName;
+  to?: string;
+  /** Every menu option — top-level and nested — renders an icon. */
+  icon: IconName;
   /** Real screen vs. a route stub. */
   implemented: boolean;
   /** Marks which stub badge value to render next to the label, if any. */
   badge?: 'referrals';
+  /**
+   * Group headers render as a full-size row by default, matching leaf items
+   * (Referrals, Shelter Management). Set this for a header that reads as a
+   * lighter section grouping (Insights, Tools) rather than a primary item.
+   */
+  sectionHeader?: boolean;
   children?: NavItem[];
 }
 
@@ -45,27 +51,44 @@ export const NAV_ITEMS: NavItem[] = [
   {
     key: 'referrals',
     label: 'Referrals',
-    to: '/referrals',
     icon: 'refer',
     implemented: false,
     badge: 'referrals',
     children: [
-      { key: 'referrals-internal', label: 'Internal', to: '/referrals/internal', implemented: false },
-      { key: 'referrals-outbound', label: 'Outbound', to: '/referrals/outbound', implemented: false },
+      {
+        key: 'referrals-internal',
+        label: 'Internal',
+        to: '/referrals/internal',
+        icon: 'swap',
+        implemented: false,
+      },
+      {
+        key: 'referrals-outbound',
+        label: 'Outbound',
+        to: '/referrals/outbound',
+        icon: 'arrowUpRight',
+        implemented: false,
+      },
     ],
   },
   {
     key: 'shelter-management',
     label: 'Shelter Management',
-    to: '/shelter-management',
     icon: 'shelter',
     implemented: false,
     children: [
-      { key: 'shelter-beds', label: 'Beds', to: '/shelter-management/beds', implemented: false },
+      {
+        key: 'shelter-beds',
+        label: 'Beds',
+        to: '/shelter-management/beds',
+        icon: 'bed',
+        implemented: false,
+      },
       {
         key: 'shelter-daily-log',
         label: 'Daily Log',
         to: '/shelter-management/daily-log',
+        icon: 'clipboard',
         implemented: false,
       },
     ],
@@ -75,9 +98,22 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Insights',
     icon: 'insight',
     implemented: false,
+    sectionHeader: true,
     children: [
-      { key: 'insights-data-quality', label: 'Data Quality', to: '/insights/data-quality', implemented: false },
-      { key: 'insights-reports', label: 'Reports', to: '/insights/reports', implemented: false },
+      {
+        key: 'insights-data-quality',
+        label: 'Data Quality',
+        to: '/insights/data-quality',
+        icon: 'shieldCheck',
+        implemented: false,
+      },
+      {
+        key: 'insights-reports',
+        label: 'Reports',
+        to: '/insights/reports',
+        icon: 'fileText',
+        implemented: false,
+      },
     ],
   },
   {
@@ -85,9 +121,22 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Tools',
     icon: 'tools',
     implemented: false,
+    sectionHeader: true,
     children: [
-      { key: 'tools-data-import', label: 'Data Import', to: '/tools/data-import', implemented: false },
-      { key: 'tools-training', label: 'Training', to: '/tools/training', implemented: false },
+      {
+        key: 'tools-data-import',
+        label: 'Data Import',
+        to: '/tools/data-import',
+        icon: 'download',
+        implemented: false,
+      },
+      {
+        key: 'tools-training',
+        label: 'Training',
+        to: '/tools/training',
+        icon: 'graduationCap',
+        implemented: false,
+      },
     ],
   },
 ];

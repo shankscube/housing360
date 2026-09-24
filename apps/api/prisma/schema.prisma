@@ -24,10 +24,11 @@ model User {
   lastName     String
   createdAt    DateTime @default(now())
 
-  assignedCases Case[]
-  createdCases  Case[] @relation("CaseCreatedBy")
-  updatedCases  Case[] @relation("CaseUpdatedBy")
-  ownedTasks    Task[]
+  assignedCases                    Case[]
+  createdCases                     Case[]                    @relation("CaseCreatedBy")
+  updatedCases                     Case[]                    @relation("CaseUpdatedBy")
+  ownedTasks                       Task[]
+  assessedVulnerabilityAssessments VulnerabilityAssessment[]
 }
 
 enum Sex {
@@ -100,17 +101,18 @@ model Client {
   headOfHousehold   Household? @relation("HouseholdHead")
   relationshipToHoh String?
 
-  enrollments            ProgramEnrollment[]
-  cases                  Case[]
-  assessments            Assessment[]
-  interactionSummaries   InteractionSummary[]
-  tasks                  Task[]
-  releasesOfInformation  ReleaseOfInformation[]
-  carePlans              CarePlan[]
-  referrals              Referral[]
-  serviceDisbursements   ServiceDisbursement[]
-  clinicalSummary        ClinicalSummary?
-  clinicalEncounters     ClinicalEncounter[]
+  enrollments              ProgramEnrollment[]
+  cases                    Case[]
+  assessments              Assessment[]
+  interactionSummaries     InteractionSummary[]
+  tasks                    Task[]
+  releasesOfInformation    ReleaseOfInformation[]
+  carePlans                CarePlan[]
+  referrals                Referral[]
+  serviceDisbursements     ServiceDisbursement[]
+  clinicalSummary          ClinicalSummary?
+  clinicalEncounters       ClinicalEncounter[]
+  vulnerabilityAssessments VulnerabilityAssessment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -188,40 +190,40 @@ model ProgramEnrollment {
 // until the `Referral` model exists later in this same file — see this
 // change's design.md Decision 1.
 model Case {
-  id                  String            @id @default(uuid())
-  caseNumber          String            @unique
-  clientId            String
-  client              Client            @relation(fields: [clientId], references: [id])
-  programEnrollmentId String
-  programEnrollment   ProgramEnrollment @relation(fields: [programEnrollmentId], references: [id])
-  subject             String?
-  description         String?           @db.Text
-  status              String            @default("open")
+  id                    String            @id @default(uuid())
+  caseNumber            String            @unique
+  clientId              String
+  client                Client            @relation(fields: [clientId], references: [id])
+  programEnrollmentId   String
+  programEnrollment     ProgramEnrollment @relation(fields: [programEnrollmentId], references: [id])
+  subject               String?
+  description           String?           @db.Text
+  status                String            @default("open")
   // HUD-coded-scalar convention: plain String, not a Prisma enum — see
   // `@housing360/types`'s `CasePriority` for the recognized values.
   priority              String?
   // HUD-coded-scalar convention, resolved against `constants/caseStageOptions.ts` / `caseOriginOptions.ts`.
   stage                 String?
   origin                String?
-  escalated             Boolean   @default(false)
+  escalated             Boolean           @default(false)
   contact               String?
   referralId            String?
-  referral              Referral? @relation("CaseOriginatingReferral", fields: [referralId], references: [id])
-  referrals             Referral[] @relation("CaseReferrals")
+  referral              Referral?         @relation("CaseOriginatingReferral", fields: [referralId], references: [id])
+  referrals             Referral[]        @relation("CaseReferrals")
   lastContactDate       DateTime?
   assignedCaseManagerId Int?
-  assignedCaseManager   User?     @relation(fields: [assignedCaseManagerId], references: [id])
-  openedDate            DateTime  @default(now())
+  assignedCaseManager   User?             @relation(fields: [assignedCaseManagerId], references: [id])
+  openedDate            DateTime          @default(now())
   closedAt              DateTime?
   nextHmisReviewDue     DateTime?
   hmisDataQualityStatus String?
   // `none | 30 | 60 | 90` — see design.md Decision 2 for how `followUpDueDate` is computed.
-  followUpMilestone String    @default("none")
-  followUpDueDate   DateTime?
-  createdById       Int?
-  createdBy         User?     @relation("CaseCreatedBy", fields: [createdById], references: [id])
-  updatedById       Int?
-  updatedBy         User?     @relation("CaseUpdatedBy", fields: [updatedById], references: [id])
+  followUpMilestone     String            @default("none")
+  followUpDueDate       DateTime?
+  createdById           Int?
+  createdBy             User?             @relation("CaseCreatedBy", fields: [createdById], references: [id])
+  updatedById           Int?
+  updatedBy             User?             @relation("CaseUpdatedBy", fields: [updatedById], references: [id])
 
   assessments          Assessment[]
   interactionSummaries InteractionSummary[]
@@ -253,6 +255,19 @@ model Assessment {
   dataCollectionStage Int               @default(1)
   assessmentDate      DateTime          @default(now())
   status              String            @default("in_progress")
+
+  // Assessment Command Center tracking fields (`assessments-and-coordinated-entry`).
+  // `type` mirrors `dataCollectionStage` (entry=1/annual=2/exit=3, kept in sync by
+  // `constants/assessmentTypes.ts`) purely for readability; `cycleNumber` lets an
+  // annual/exit assessment recur across years without colliding with an earlier
+  // cycle on the same enrollment+stage — see design.md Decision 1. Entry assessments
+  // never set it, so it stays `1` and the intake wizard's upsert-by-unique-key
+  // behavior (`client-intake`'s "exactly one Entry Assessment" guarantee) is unchanged.
+  type        String?
+  dueDate     DateTime?
+  score       Int?
+  scoreLabel  String?
+  cycleNumber Int       @default(1)
 
   // Living situation (HUD 3.917)
   situationCategory               String?
@@ -363,7 +378,7 @@ model Assessment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([programEnrollmentId, dataCollectionStage])
+  @@unique([programEnrollmentId, dataCollectionStage, cycleNumber])
 }
 
 // Child of Assessment (HUD 4.05-4.10). One row per disability record; the
@@ -409,9 +424,9 @@ model InteractionSummary {
   interactionPurpose  String?
   confidentialityType String?
   partnerAccount      String?
-  offering             String?
-  relatedRecordType    String?
-  relatedRecordId      String?
+  offering            String?
+  relatedRecordType   String?
+  relatedRecordId     String?
 
   tasks Task[]
 
@@ -427,23 +442,23 @@ model InteractionSummary {
 // `case-workspace`'s design.md Decision 3. `goalAssignmentId` is a plain
 // scalar (no `@relation`) until `GoalAssignment` exists later in this file.
 model Task {
-  id                 String    @id @default(uuid())
-  subject            String
-  description        String?   @db.Text
-  status             String    @default("open")
-  priority           String?
+  id                   String              @id @default(uuid())
+  subject              String
+  description          String?             @db.Text
+  status               String              @default("open")
+  priority             String?
   // Distinguishes a plain case task from a care-plan-goal task from a
   // follow-up task without a second table.
-  subtype            String?
-  dueDate            DateTime?
-  ownerId            Int?
-  owner              User?     @relation(fields: [ownerId], references: [id])
-  clientId           String
-  client             Client    @relation(fields: [clientId], references: [id])
-  caseId             String?
-  case               Case?     @relation(fields: [caseId], references: [id])
-  goalAssignmentId   String?
-  goalAssignment     GoalAssignment? @relation(fields: [goalAssignmentId], references: [id])
+  subtype              String?
+  dueDate              DateTime?
+  ownerId              Int?
+  owner                User?               @relation(fields: [ownerId], references: [id])
+  clientId             String
+  client               Client              @relation(fields: [clientId], references: [id])
+  caseId               String?
+  case                 Case?               @relation(fields: [caseId], references: [id])
+  goalAssignmentId     String?
+  goalAssignment       GoalAssignment?     @relation(fields: [goalAssignmentId], references: [id])
   interactionSummaryId String?
   interactionSummary   InteractionSummary? @relation(fields: [interactionSummaryId], references: [id])
 
@@ -463,14 +478,14 @@ model Task {
 // — computed at read time in `releaseOfInformation.service.ts`, never a
 // stored boolean.
 model ReleaseOfInformation {
-  id     String @id @default(uuid())
+  id       String @id @default(uuid())
   clientId String
   client   Client @relation(fields: [clientId], references: [id])
 
-  recipientOrgName       String
-  recipientContactName   String?
-  recipientContactEmail  String?
-  recipientContactPhone  String?
+  recipientOrgName      String
+  recipientContactName  String?
+  recipientContactEmail String?
+  recipientContactPhone String?
 
   infoCaseManagement     Boolean @default(false)
   infoDayToDayActivity   Boolean @default(false)
@@ -517,11 +532,11 @@ model CarePlanTemplate {
 }
 
 model CarePlanTemplateGoal {
-  id            String @id @default(uuid())
+  id            String           @id @default(uuid())
   templateId    String
   template      CarePlanTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   name          String
-  description   String? @db.Text
+  description   String?          @db.Text
   priority      String?
   serviceDomain String?
 
@@ -534,11 +549,11 @@ model CarePlanTemplateGoal {
 }
 
 model CarePlanTemplateTask {
-  id             String @id @default(uuid())
+  id             String               @id @default(uuid())
   templateGoalId String
   templateGoal   CarePlanTemplateGoal @relation(fields: [templateGoalId], references: [id], onDelete: Cascade)
   subject        String
-  description    String? @db.Text
+  description    String?              @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -563,14 +578,14 @@ model GoalDefinition {
 // Status values: Proposed | Draft | Active | Completed | Cancelled — plain
 // String per the repo's HUD-coded-scalar convention, not a Prisma enum.
 model CarePlan {
-  id          String    @id @default(uuid())
+  id          String            @id @default(uuid())
   caseId      String
-  case        Case      @relation(fields: [caseId], references: [id])
+  case        Case              @relation(fields: [caseId], references: [id])
   clientId    String
-  client      Client    @relation(fields: [clientId], references: [id])
+  client      Client            @relation(fields: [clientId], references: [id])
   name        String
-  description String?   @db.Text
-  status      String    @default("Proposed")
+  description String?           @db.Text
+  status      String            @default("Proposed")
   startDate   DateTime?
   endDate     DateTime?
   templateId  String?
@@ -590,15 +605,15 @@ model CarePlan {
 // in the shared `Task` table via `Task.goalAssignmentId`, not a child table
 // here (design.md Decision 3).
 model GoalAssignment {
-  id               String   @id @default(uuid())
+  id               String          @id @default(uuid())
   carePlanId       String
-  carePlan         CarePlan @relation(fields: [carePlanId], references: [id])
+  carePlan         CarePlan        @relation(fields: [carePlanId], references: [id])
   goalDefinitionId String?
   goalDefinition   GoalDefinition? @relation(fields: [goalDefinitionId], references: [id])
   name             String
-  description      String?  @db.Text
+  description      String?         @db.Text
   priority         String?
-  status           String   @default("Not Started")
+  status           String          @default("Not Started")
   serviceDomain    String?
 
   tasks Task[]
@@ -620,8 +635,8 @@ model Organization {
   isPartner    Boolean @default(true)
 
   serviceDomains      OrganizationServiceDomain[]
-  referralsAsProvider Referral[] @relation("ReferralProvider")
-  referralsAsReferrer Referral[] @relation("ReferralReferrer")
+  referralsAsProvider Referral[]                  @relation("ReferralProvider")
+  referralsAsReferrer Referral[]                  @relation("ReferralReferrer")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -644,14 +659,14 @@ model OrganizationServiceDomain {
 // originating referral) and `Referral.caseId` (this referral's case, for the
 // Referrals tab list) are deliberately separate relations.
 model Referral {
-  id     String @id @default(uuid())
-  title  String
-  clientId String
-  client   Client @relation(fields: [clientId], references: [id])
-  caseId   String?
-  case     Case?  @relation("CaseReferrals", fields: [caseId], references: [id])
-  programId String?
-  program   Program? @relation(fields: [programId], references: [id])
+  id            String        @id @default(uuid())
+  title         String
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id])
+  caseId        String?
+  case          Case?         @relation("CaseReferrals", fields: [caseId], references: [id])
+  programId     String?
+  program       Program?      @relation(fields: [programId], references: [id])
   providerOrgId String?
   providerOrg   Organization? @relation("ReferralProvider", fields: [providerOrgId], references: [id])
   referrerOrgId String?
@@ -680,7 +695,8 @@ model Referral {
   declineNotes        String? @db.Text
   isExternal          Boolean @default(false)
 
-  originatingForCases Case[] @relation("CaseOriginatingReferral")
+  originatingForCases                Case[]                   @relation("CaseOriginatingReferral")
+  originatingVulnerabilityAssessment VulnerabilityAssessment?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -688,6 +704,31 @@ model Referral {
   @@index([clientId])
   @@index([caseId])
   @@index([providerOrgId])
+}
+
+// Coordinated Entry's screening record (`assessments-and-coordinated-entry`).
+// Deliberately separate from `Assessment` — it can exist before a client has
+// any `ProgramEnrollment` (Assessment.programEnrollmentId is required), and
+// its question set is a placeholder pending the real VI-SPDAT-style design
+// (see design.md Decision 3). `answers` is a Json bag for exactly that reason:
+// the real instrument isn't designed yet, so no fixed column set is carved in.
+model VulnerabilityAssessment {
+  id           String    @id @default(uuid())
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id])
+  answers      Json
+  score        Int
+  priorityTier String
+  safetyAlert  Boolean   @default(false)
+  assessedById Int
+  assessedBy   User      @relation(fields: [assessedById], references: [id])
+  referralId   String?   @unique
+  referral     Referral? @relation(fields: [referralId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
 }
 
 // Pulled forward from the Services tab's migration (originally planned for
@@ -732,12 +773,12 @@ model BenefitAssignment {
 // tables today; the shape exists so a future change can plug in a real
 // adapter with zero schema change.
 model ClinicalSummary {
-  id                 String    @id @default(uuid())
-  clientId           String    @unique
-  client             Client    @relation(fields: [clientId], references: [id])
-  lastVisitDate      DateTime?
+  id                  String    @id @default(uuid())
+  clientId            String    @unique
+  client              Client    @relation(fields: [clientId], references: [id])
+  lastVisitDate       DateTime?
   nextAppointmentDate DateTime?
-  openFollowUpsCount Int       @default(0)
+  openFollowUpsCount  Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

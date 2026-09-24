@@ -1,9 +1,17 @@
 import { NextFunction, Request, Response } from 'express';
-import type { AssessmentInput, AssessmentUpdateInput } from '@housing360/types';
+import type {
+  AssessmentFilter,
+  AssessmentInput,
+  AssessmentListQuery,
+  AssessmentTypeFilter,
+  AssessmentUpdateInput,
+} from '@housing360/types';
 import {
   createOrUpsertAssessment,
   discardAssessment,
+  getAssessmentDetail,
   getAssessmentForEnrollment,
+  listAssessments,
   listAssessmentsByEnrollment,
   patchAssessment,
 } from '../services/assessment.service';
@@ -71,6 +79,37 @@ export async function createAssessmentHandler(req: Request, res: Response, next:
       input as AssessmentInput & { status?: string }
     );
     sendSuccess(res, { code: 201, message: 'Assessment saved', data: assessment });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** `GET /api/assessments` — the Assessment Command Center's global, paginated list. */
+export async function listAssessmentsHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query: AssessmentListQuery = {
+      page: req.query.page ? Number(req.query.page) : undefined,
+      pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
+      filter: (req.query.filter as AssessmentFilter | undefined) ?? undefined,
+      typeFilter: (req.query.typeFilter as AssessmentTypeFilter | undefined) ?? undefined,
+      search: typeof req.query.search === 'string' ? req.query.search : undefined,
+    };
+    const result = await listAssessments(query);
+    sendSuccess(res, { code: 200, message: 'Assessments retrieved', data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** `GET /api/assessments/:id` — includes score/scoreLabel for the detail view. */
+export async function getAssessmentDetailHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, 'Assessment id is required');
+    }
+    const assessment = await getAssessmentDetail(id);
+    sendSuccess(res, { code: 200, message: 'Assessment retrieved', data: assessment });
   } catch (err) {
     next(err);
   }

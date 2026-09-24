@@ -1,0 +1,30 @@
+## Why
+
+Housing360 can intake a client, build a household, enroll them in a program, and staff a case — but nothing yet tracks the assessments that keep an enrollment HUD-compliant over time, and there is no coordinated-entry workflow to triage and refer a new client into the right program before an enrollment even exists. Both screens are currently unbuilt stubs (`AssessmentsPage`, `CoordinatedEntryPage`) with placeholder Redux slices that call endpoints that don't exist. This change replaces both stubs with real, data-backed screens and gives the app its first (deliberately placeholder) scoring engine, so later changes can drop in the real HUD housing-stability and VI-SPDAT algorithms behind a seam that already exists.
+
+## What Changes
+
+- Add a global, cross-case **Assessment Command Center** (`GET/POST /api/assessments`, `GET/PATCH /api/assessments/:id`) — KPI row (Due Today / In Progress / Completed / Total), combined status + type filter chips, and a paginated table across every client's assessments.
+- Extend the existing `Assessment` model (the HUD Entry-assessment content record introduced by `client-intake-wizard`) in place rather than introducing a colliding second "Assessment" concept — see design.md's Decision 1 for why a parallel model was rejected. Adds `type` (`entry|annual|exit`), `dueDate`, `score`, `scoreLabel`, and a `cycleNumber` column so annual/exit assessments can recur across years without disturbing the Entry assessment's existing "exactly one record" guarantee (`client-intake` spec, `Health & DV Step Completes One Entry Assessment Record`).
+- Add a `ScoringService` (`apps/api/src/services/scoring.service.ts`) exposing `scoreAssessment(...)` and `scoreVulnerability(...)`, both implemented with a clearly-labeled placeholder algorithm — the load-bearing seam the real HUD/VI-SPDAT scoring design will replace later. `Assessment.score`/`scoreLabel` are only ever set by this service, never computed inline in a controller.
+- Add a **Coordinated Entry** workflow: a new `VulnerabilityAssessment` model + `POST /api/coordinated-entry/vulnerability-assessment` (step 1, scored via `ScoringService`), `GET /api/coordinated-entry/recommended-programs` (step 2, seeded `Program` rows ranked by priority tier), `GET /api/coordinated-entry/partner-agencies` (step 3, reuses the existing `Organization`/`OrganizationServiceDomain` models), and `POST /api/coordinated-entry/referrals` (step 4 — reuses the existing `Referral` table with `isExternal: true`, does not add a second referral concept or any Referrals list/detail UI).
+- Add `GET /api/coordinated-entry/prioritization-list` — every completed vulnerability assessment, ranked by priority tier/score, with quick-filter chips (Top 5 High Priority, Veterans, Unaccompanied Youth, Safety Alerts, Awaiting Referral); filters are composable (AND), documented in design.md/spec since the prompt leaves this open.
+- Frontend: real `assessments` and `coordinatedEntry` Redux slices (replacing the placeholder stubs, which call a shape and an endpoint that never existed), an `AssessmentCommandCenterPage` (KPI tiles, two `FilterChipRow`s, `DataTable`, detail view with score/label rendered as a prominent tile rather than a numeric field), and a `CoordinatedEntryPage` (a 4-step wizard shell — reusing `StatusStepper` for the visual indicator, following the existing `IntakeWizard`/`CarePlanWizard` shell pattern for per-step content — plus the Prioritization List below it).
+- **BREAKING**: none. The existing `POST /api/assessments` / `PATCH /api/assessments/:id` / `DELETE /api/assessments/:id` routes, their upsert-by-`(programEnrollmentId, dataCollectionStage)` contract, and the Entry-assessment "exactly one record" guarantee are all preserved unchanged (verified in design.md).
+
+## Capabilities
+
+### New Capabilities
+- `assessment-tracking`: the Assessment Command Center screen, the extended `Assessment` tracking fields (type/due date/score/label), and the `ScoringService.scoreAssessment` contract.
+- `coordinated-entry`: the 4-step Coordinated Entry wizard, the `VulnerabilityAssessment` record, `ScoringService.scoreVulnerability`, recommended-programs/partner-agency lookups, the minimal external-referral hand-off, and the Prioritization List.
+
+### Modified Capabilities
+_None._ The `Assessment` model changes are additive and preserve every requirement currently documented in `client-intake`'s spec (verified explicitly in design.md); the `case-management` spec's Assessments-tab requirement to display "score" is unaffected in wording — it simply stops being a permanent placeholder.
+
+## Impact
+
+- **Schema**: `apps/api/prisma/schema.prisma` — `Assessment` gains `type`, `dueDate`, `score`, `scoreLabel`, `cycleNumber`; unique constraint becomes `(programEnrollmentId, dataCollectionStage, cycleNumber)`. New `VulnerabilityAssessment` model. `Referral` gains no new columns (reused as-is).
+- **Backend**: `apps/api/src/services/scoring.service.ts` (new), `assessment.routes/controller/service/model.ts` (extended), new `coordinatedEntry.routes/controller/service/model.ts`, new `constants/coordinatedEntryOptions.ts` (recommended-program-type mapping by tier, quick-filter definitions — same "served from one config" convention as `hudOptions.ts`).
+- **Frontend**: `apps/web/src/store/slices/assessmentsSlice.ts` and `coordinatedEntrySlice.ts` (replaced), `packages/types/src/assessments.ts` and `coordinatedEntry.ts` (extended/replaced — the current `CoordinatedEntryEntry` placeholder type is removed), `apps/web/src/routes/pages/AssessmentsPage.tsx` and `CoordinatedEntryPage.tsx` (filled in), new `apps/web/src/features/assessments/` and `apps/web/src/features/coordinatedEntry/`.
+- **Read-only dependency**: `client-management`'s `Client` model (`veteranStatus`, `dob`, `householdId`) for the Prioritization List's Veterans/Unaccompanied Youth quick filters — no changes to that capability.
+- **Depends on**: `client-management` (Phase 3, already archived) for client search/lookup used by both new screens.

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { Icon } from '../ui';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
@@ -72,10 +72,24 @@ interface NavRailEntryProps {
 
 function NavRailEntry({ item, collapsed, referralsBadgeCount }: NavRailEntryProps) {
   const showBadge = item.badge === 'referrals' && !collapsed;
+  const location = useLocation();
+  const hasActiveChild = Boolean(
+    item.children?.some((child) => child.to && location.pathname.startsWith(child.to))
+  );
+  const [isOpen, setIsOpen] = useState(hasActiveChild);
+
+  useEffect(() => {
+    if (hasActiveChild) {
+      setIsOpen(true);
+    }
+  }, [hasActiveChild]);
+
+  const showChildren = Boolean(item.children) && !collapsed && isOpen;
 
   return (
     <div>
       {item.to ? (
+        // Leaf item — navigates. Group headers never set `to` (see navConfig).
         <NavLink
           to={item.to}
           end={item.to === '/'}
@@ -88,11 +102,9 @@ function NavRailEntry({ item, collapsed, referralsBadgeCount }: NavRailEntryProp
             ].join(' ')
           }
         >
-          {item.icon ? (
-            <span className="shrink-0 opacity-90">
-              <Icon name={item.icon} />
-            </span>
-          ) : null}
+          <span className="shrink-0 opacity-90">
+            <Icon name={item.icon} />
+          </span>
           {collapsed ? null : (
             <>
               <span className="flex-1 truncate">{item.label}</span>
@@ -107,14 +119,58 @@ function NavRailEntry({ item, collapsed, referralsBadgeCount }: NavRailEntryProp
       ) : collapsed ? (
         // A group header has nothing to show at icon-only width.
         null
+      ) : item.sectionHeader ? (
+        <button
+          type="button"
+          onClick={() => setIsOpen((open) => !open)}
+          aria-expanded={isOpen}
+          className="flex w-full items-center gap-4.5 rounded-lg px-5 pb-2 pt-8 text-textMuted transition-colors hover:text-ink"
+        >
+          <span className="shrink-0 opacity-90">
+            <Icon name={item.icon} size={15} />
+          </span>
+          <span className="flex-1 truncate text-left text-2xs font-semibold uppercase tracking-wider">
+            {item.label}
+          </span>
+          <Icon
+            name="chevronRight"
+            size={12}
+            className={`shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+          />
+        </button>
       ) : (
-        <div className="px-5 pb-2 pt-8 text-2xs font-semibold uppercase tracking-wider text-textMuted">
-          {item.label}
-        </div>
+        // A primary group header (Referrals, Shelter Management) — same
+        // full-row look as a leaf item, but the whole row toggles open/closed
+        // instead of navigating, so it's one click target like every other row.
+        <button
+          type="button"
+          onClick={() => setIsOpen((open) => !open)}
+          aria-expanded={isOpen}
+          className={[
+            itemBaseClass,
+            hasActiveChild ? itemActiveClass : itemRestClass,
+            'px-5.5 py-4',
+          ].join(' ')}
+        >
+          <span className="shrink-0 opacity-90">
+            <Icon name={item.icon} />
+          </span>
+          <span className="flex-1 truncate text-left">{item.label}</span>
+          {showBadge ? (
+            <span className="rounded-full bg-tealTintStrong px-2.5 py-0.5 text-xs font-semibold text-tealDeep">
+              {referralsBadgeCount}
+            </span>
+          ) : null}
+          <Icon
+            name="chevronRight"
+            size={14}
+            className={`shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+          />
+        </button>
       )}
 
-      {item.children && !collapsed
-        ? item.children.map((child) => (
+      {showChildren
+        ? item.children!.map((child) => (
             <NavLink
               key={child.key}
               to={child.to ?? '#'}
@@ -122,10 +178,13 @@ function NavRailEntry({ item, collapsed, referralsBadgeCount }: NavRailEntryProp
                 [
                   itemBaseClass,
                   isActive ? itemActiveClass : itemRestClass,
-                  'py-4 pl-16 pr-5',
+                  'gap-3 py-3 pl-12 pr-5',
                 ].join(' ')
               }
             >
+              <span className="shrink-0 opacity-90">
+                <Icon name={child.icon} size={16} />
+              </span>
               <span className="truncate">{child.label}</span>
             </NavLink>
           ))

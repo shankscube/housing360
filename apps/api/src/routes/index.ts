@@ -18,6 +18,7 @@ import { referralRouter } from './referral.routes';
 import { serviceRouter } from './service.routes';
 import { bedRouter } from './bed.routes';
 import { healthWellnessRouter } from './healthWellness.routes';
+import { coordinatedEntryRouter } from './coordinatedEntry.routes';
 
 export const apiRouter = Router();
 
@@ -47,3 +48,4 @@ apiRouter.use('/api', referralRouter);
 apiRouter.use('/api', serviceRouter);
 apiRouter.use('/api', bedRouter);
 apiRouter.use('/api', healthWellnessRouter);
+apiRouter.use('/api', coordinatedEntryRouter);

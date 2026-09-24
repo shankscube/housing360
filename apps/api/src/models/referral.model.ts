@@ -36,3 +36,16 @@ export function updateReferral(
 ): Promise<ReferralRow> {
   return prisma.referral.update({ where: { id }, data, include: REFERRAL_INCLUDE });
 }
+
+/**
+ * A Coordinated Entry referral (`assessments-and-coordinated-entry`) is created
+ * with `caseId: null` — no case exists yet at that point in the flow. Once a
+ * case is later opened for that same client, its referrals should surface
+ * through the existing case-scoped Referrals tab rather than needing a
+ * dedicated pre-case referral UI (`coordinated-entry` spec's "visible to
+ * existing referral listings" requirement) — called from `case.service.ts`'s
+ * `ensureCase`/`createCase`.
+ */
+export async function attachOrphanReferralsToCase(clientId: string, caseId: string): Promise<void> {
+  await prisma.referral.updateMany({ where: { clientId, caseId: null }, data: { caseId } });
+}

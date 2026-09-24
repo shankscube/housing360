@@ -1,6 +1,16 @@
 import { Prisma } from '@prisma/client';
-import type { Assessment, AssessmentInput } from '@housing360/types';
-import type { AssessmentRow } from './assessment.model';
+import type {
+  Assessment,
+  AssessmentDetail,
+  AssessmentInput,
+  AssessmentListItem,
+  AssessmentType,
+} from '@housing360/types';
+import type { AssessmentListRow, AssessmentRow } from './assessment.model';
+
+function toAssessmentType(type: string | null): AssessmentType | null {
+  return type === 'entry' || type === 'annual' || type === 'exit' ? type : null;
+}
 
 /** Every `Decimal? @db.Decimal(10,2)` income-amount column on `Assessment`. */
 const AMOUNT_FIELDS = [
@@ -36,6 +46,11 @@ export function toAssessment(row: AssessmentRow): Assessment {
     programEnrollmentId: row.programEnrollmentId,
     caseId: row.caseId,
     dataCollectionStage: row.dataCollectionStage,
+    type: toAssessmentType(row.type),
+    dueDate: row.dueDate ? row.dueDate.toISOString() : null,
+    score: row.score,
+    scoreLabel: row.scoreLabel,
+    cycleNumber: row.cycleNumber,
     assessmentDate: row.assessmentDate.toISOString(),
     status: row.status,
     createdAt: row.createdAt.toISOString(),
@@ -143,10 +158,12 @@ export function toAssessment(row: AssessmentRow): Assessment {
 
 /** The Living-Situation / Income-Benefits-Insurance / Health-DV section fields shared by
  * both `AssessmentInput` and `AssessmentUpdateInput`, plus the optional `status`
- * passthrough the service accepts on create. */
+ * passthrough the service accepts on create. `type`/`dueDate`/`cycleNumber` are
+ * scheduling fields handled explicitly by the service, same as `dataCollectionStage`
+ * — not part of the generic section passthrough. */
 type AssessmentSectionFields = Omit<
   AssessmentInput,
-  'clientId' | 'programEnrollmentId' | 'caseId' | 'dataCollectionStage'
+  'clientId' | 'programEnrollmentId' | 'caseId' | 'dataCollectionStage' | 'type' | 'dueDate' | 'cycleNumber'
 >;
 
 /** Plain-value shape (no Prisma `FieldUpdateOperationsInput` wrappers) that satisfies
@@ -155,7 +172,16 @@ type AssessmentSectionFields = Omit<
  * create and update, so one return type works for both call sites. */
 type AssessmentSectionWriteData = Omit<
   Prisma.AssessmentUncheckedCreateInput,
-  'id' | 'clientId' | 'programEnrollmentId' | 'caseId' | 'dataCollectionStage' | 'assessmentDate' | 'status'
+  | 'id'
+  | 'clientId'
+  | 'programEnrollmentId'
+  | 'caseId'
+  | 'dataCollectionStage'
+  | 'assessmentDate'
+  | 'status'
+  | 'type'
+  | 'dueDate'
+  | 'cycleNumber'
 >;
 
 /** Field names line up 1:1 with the Prisma Unchecked create/update input shapes (both
@@ -167,4 +193,34 @@ export function assessmentSectionFieldsToWriteData(
   input: AssessmentSectionFields | Partial<AssessmentSectionFields>
 ): AssessmentSectionWriteData {
   return { ...input };
+}
+
+/** Global Command Center list + per-enrollment Assessments tab list — both read
+ * through `AssessmentListRow` (joined client/programEnrollment names). */
+export function toAssessmentListItem(row: AssessmentListRow): AssessmentListItem {
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    clientName: `${row.client.firstName} ${row.client.lastName}`,
+    programEnrollmentId: row.programEnrollmentId,
+    programEnrollmentName: row.programEnrollment.name,
+    dataCollectionStage: row.dataCollectionStage,
+    type: toAssessmentType(row.type),
+    dueDate: row.dueDate ? row.dueDate.toISOString() : null,
+    assessmentDate: row.assessmentDate.toISOString(),
+    status: row.status,
+    score: row.score,
+    scoreLabel: row.scoreLabel,
+  };
+}
+
+/** `GET /api/assessments/:id` — list-row shape plus the fields only the detail view needs. */
+export function toAssessmentDetail(row: AssessmentListRow): AssessmentDetail {
+  return {
+    ...toAssessmentListItem(row),
+    caseId: row.caseId,
+    cycleNumber: row.cycleNumber,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }

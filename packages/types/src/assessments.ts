@@ -105,10 +105,16 @@ export interface AssessmentHealthDv {
   dvCurrentlyFleeing?: string | null;
 }
 
+/** `assessments-and-coordinated-entry` — mirrors `dataCollectionStage` (1/2/3), kept in
+ * sync server-side by `constants/assessmentTypes.ts` so the two never drift apart. */
+export type AssessmentType = 'entry' | 'annual' | 'exit';
+
 /**
  * The Entry Assessment (`dataCollectionStage = 1`). Steps 4-6 of the intake
  * wizard all write to one record — see design.md's "single Entry Assessment
- * record" decision.
+ * record" decision. `type`/`dueDate`/`score`/`scoreLabel`/`cycleNumber` were
+ * added by `assessments-and-coordinated-entry` for the Assessment Command
+ * Center — see that change's design.md Decision 1.
  */
 export interface Assessment
   extends AssessmentLivingSituation,
@@ -119,6 +125,11 @@ export interface Assessment
   programEnrollmentId: string;
   caseId: string;
   dataCollectionStage: number;
+  type: AssessmentType | null;
+  dueDate: string | null;
+  score: number | null;
+  scoreLabel: string | null;
+  cycleNumber: number;
   assessmentDate: string;
   status: string;
   createdAt: string;
@@ -126,17 +137,24 @@ export interface Assessment
 }
 
 /**
- * The Assessments tab's list-row shape (`case-workspace`) — `score` is a
- * placeholder (always `null`) since no scoring engine exists yet; see
- * design.md's Non-Goals.
+ * The Assessments tab's list-row shape (`case-workspace`), extended by
+ * `assessments-and-coordinated-entry` with the Command Center's client/program
+ * context and real `score` — no longer a permanent `null` placeholder once an
+ * assessment has been scored.
  */
 export interface AssessmentListItem {
   id: string;
+  clientId: string;
+  clientName: string;
   programEnrollmentId: string;
+  programEnrollmentName: string;
   dataCollectionStage: number;
+  type: AssessmentType | null;
+  dueDate: string | null;
   assessmentDate: string;
   status: string;
   score: number | null;
+  scoreLabel: string | null;
 }
 
 export type AssessmentInput = AssessmentLivingSituation &
@@ -146,11 +164,54 @@ export type AssessmentInput = AssessmentLivingSituation &
     programEnrollmentId: string;
     caseId: string;
     dataCollectionStage?: number;
+    type?: AssessmentType;
+    dueDate?: string | null;
+    cycleNumber?: number;
   };
 
 export type AssessmentUpdateInput = Partial<
   Omit<AssessmentInput, 'clientId' | 'programEnrollmentId' | 'caseId'>
->;
+> & {
+  status?: string;
+};
+
+/** Assessment Command Center's status filter — computed from `status`/`dueDate`,
+ * not a stored column (same "computed, not stored" convention as `Case`'s KPIs). */
+export type AssessmentFilter = 'all' | 'overdue' | 'dueToday' | 'inProgress' | 'completed';
+
+export type AssessmentTypeFilter = 'all' | AssessmentType;
+
+export interface AssessmentListQuery {
+  page?: number;
+  pageSize?: number;
+  filter?: AssessmentFilter;
+  typeFilter?: AssessmentTypeFilter;
+  search?: string;
+}
+
+export interface AssessmentKpiCounts {
+  dueToday: number;
+  inProgress: number;
+  completed: number;
+  total: number;
+}
+
+export interface AssessmentListResult {
+  items: AssessmentListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  kpis: AssessmentKpiCounts;
+}
+
+/** `GET /api/assessments/:id` — the list-row shape plus the handful of fields
+ * only the detail view needs. */
+export interface AssessmentDetail extends AssessmentListItem {
+  caseId: string;
+  cycleNumber: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /** Per-enrollment Entry Assessment status, as served by the intake-snapshot endpoint. */
 export interface EntryAssessmentStatus {

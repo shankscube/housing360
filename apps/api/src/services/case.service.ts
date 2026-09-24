@@ -34,7 +34,7 @@ import { findAssessmentByEnrollmentAndStage } from '../models/assessment.model';
 import { findDisabilitiesByAssessmentId } from '../models/disability.model';
 import { countCarePlansByCase } from '../models/carePlan.model';
 import { countBenefitAssignmentsByClient } from '../models/service.model';
-import { countReferralsByCase } from '../models/referral.model';
+import { attachOrphanReferralsToCase, countReferralsByCase } from '../models/referral.model';
 import { findActiveReleaseOfInformation } from '../models/releaseOfInformation.model';
 import {
   HUD_DATA_CHECKLIST,
@@ -64,6 +64,7 @@ function normalizePagination(query: CaseListQuery): { page: number; pageSize: nu
 export async function ensureCase(input: EnsureCaseInput): Promise<Case> {
   // Type field is `enrollmentId`; the Prisma column is `programEnrollmentId`.
   const row = await ensureCaseRow(input.clientId, input.enrollmentId);
+  await attachOrphanReferralsToCase(input.clientId, row.id);
   return {
     id: row.id,
     clientId: row.clientId,
@@ -197,6 +198,8 @@ export async function createCase(input: CaseCreateInput, requestingUserId: numbe
     assignedCaseManagerId: input.assignedCaseManagerId ?? null,
     createdById: requestingUserId,
   });
+
+  await attachOrphanReferralsToCase(input.clientId, row.id);
 
   const tabsWithContent = await computeTabsWithContent(row);
   return toCaseDetail(row, tabsWithContent);

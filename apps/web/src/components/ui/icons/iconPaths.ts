@@ -60,6 +60,27 @@ export const ICON_SHAPES = {
   chevronsLeft: { paths: ['m17 18-6-6 6-6', 'm10 18-6-6 6-6'] },
   /** Toast's dismiss control. */
   close: { paths: ['M6 6l12 12', 'M18 6 6 18'] },
+  /** Nested nav items under Referrals/Shelter Management/Insights/Tools — no bundle reference, drawn in the same idiom. */
+  swap: { paths: ['M4 8h13M13 4l4 4-4 4', 'M20 16H7M11 12l-4 4 4 4'] },
+  arrowUpRight: { paths: ['M7 17 17 7', 'M10 7h7v7'] },
+  bed: {
+    paths: [
+      'M3 19v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5',
+      'M3 19v2M21 19v2',
+      'M5 12V9a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3',
+    ],
+  },
+  clipboard: {
+    paths: [
+      'M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1z',
+      'M6 5h12a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',
+      'M9 11h6M9 15h6',
+    ],
+  },
+  shieldCheck: { paths: ['M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z', 'm9 12 2 2 4-4'] },
+  fileText: { paths: ['M6 3h9l3 3v15H6z', 'M15 3v3h3', 'M9 12h6M9 16h6'] },
+  download: { paths: ['M12 3v10', 'm7 9 5 5 5-5', 'M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3'] },
+  graduationCap: { paths: ['M12 4 2 9l10 5 10-5z', 'M6 12v5c0 1 3 3 6 3s6-2 6-3v-5'] },
 } as const satisfies Record<string, IconShape>;
 
 export type IconName = keyof typeof ICON_SHAPES;

@@ -7,6 +7,7 @@ import { MyClientsPage } from './pages/MyClientsPage';
 import { CasesPage } from './pages/CasesPage';
 import { CaseDetailPage } from './pages/CaseDetailPage';
 import { AssessmentsPage } from './pages/AssessmentsPage';
+import { AssessmentDetailPage } from '../features/assessments/AssessmentDetailPage';
 import { CoordinatedEntryPage } from './pages/CoordinatedEntryPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 
@@ -21,6 +22,7 @@ export function AppRoutes() {
           <Route path="/cases" element={<CasesPage />} />
           <Route path="/cases/:id" element={<CaseDetailPage />} />
           <Route path="/assessments" element={<AssessmentsPage />} />
+          <Route path="/assessments/:id" element={<AssessmentDetailPage />} />
           <Route path="/coordinated-entry" element={<CoordinatedEntryPage />} />
 
           <Route
