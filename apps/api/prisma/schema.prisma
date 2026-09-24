@@ -25,6 +25,9 @@ model User {
   createdAt    DateTime @default(now())
 
   assignedCases Case[]
+  createdCases  Case[] @relation("CaseCreatedBy")
+  updatedCases  Case[] @relation("CaseUpdatedBy")
+  ownedTasks    Task[]
 }
 
 enum Sex {
@@ -97,10 +100,17 @@ model Client {
   headOfHousehold   Household? @relation("HouseholdHead")
   relationshipToHoh String?
 
-  enrollments          ProgramEnrollment[]
-  cases                Case[]
-  assessments          Assessment[]
-  interactionSummaries InteractionSummary[]
+  enrollments            ProgramEnrollment[]
+  cases                  Case[]
+  assessments            Assessment[]
+  interactionSummaries   InteractionSummary[]
+  tasks                  Task[]
+  releasesOfInformation  ReleaseOfInformation[]
+  carePlans              CarePlan[]
+  referrals              Referral[]
+  serviceDisbursements   ServiceDisbursement[]
+  clinicalSummary        ClinicalSummary?
+  clinicalEncounters     ClinicalEncounter[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -130,6 +140,9 @@ model Program {
   name        String
   isActive    Boolean             @default(true)
   enrollments ProgramEnrollment[]
+  referrals   Referral[]
+  benefits    Benefit[]
+  beds        Bed[]
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 }
@@ -150,8 +163,10 @@ model ProgramEnrollment {
   programCaseManagerId String?
   isPrimary            Boolean  @default(false)
 
-  cases       Case[]
-  assessments Assessment[]
+  cases              Case[]
+  assessments        Assessment[]
+  benefitAssignments BenefitAssignment[]
+  bedAssignments     BedAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -167,6 +182,11 @@ model ProgramEnrollment {
 // added by `cases-screen` for the Case Operations Center; `status` already
 // existed (defaulted `"open"` by `ensureCase`) and is reused rather than
 // duplicated — see that change's design.md.
+// `case-workspace` extends this row with the fields the New Case modal, the
+// detail header/Edit form, and the Overview tab's Follow-Up Reminder and
+// System Information need. `referralId` is a plain scalar (no `@relation`)
+// until the `Referral` model exists later in this same file — see this
+// change's design.md Decision 1.
 model Case {
   id                  String            @id @default(uuid())
   caseNumber          String            @unique
@@ -175,22 +195,45 @@ model Case {
   programEnrollmentId String
   programEnrollment   ProgramEnrollment @relation(fields: [programEnrollmentId], references: [id])
   subject             String?
+  description         String?           @db.Text
   status              String            @default("open")
   // HUD-coded-scalar convention: plain String, not a Prisma enum — see
   // `@housing360/types`'s `CasePriority` for the recognized values.
-  priority               String?
-  lastContactDate        DateTime?
-  assignedCaseManagerId  Int?
-  assignedCaseManager    User?    @relation(fields: [assignedCaseManagerId], references: [id])
+  priority              String?
+  // HUD-coded-scalar convention, resolved against `constants/caseStageOptions.ts` / `caseOriginOptions.ts`.
+  stage                 String?
+  origin                String?
+  escalated             Boolean   @default(false)
+  contact               String?
+  referralId            String?
+  referral              Referral? @relation("CaseOriginatingReferral", fields: [referralId], references: [id])
+  referrals             Referral[] @relation("CaseReferrals")
+  lastContactDate       DateTime?
+  assignedCaseManagerId Int?
+  assignedCaseManager   User?     @relation(fields: [assignedCaseManagerId], references: [id])
+  openedDate            DateTime  @default(now())
+  closedAt              DateTime?
+  nextHmisReviewDue     DateTime?
+  hmisDataQualityStatus String?
+  // `none | 30 | 60 | 90` — see design.md Decision 2 for how `followUpDueDate` is computed.
+  followUpMilestone String    @default("none")
+  followUpDueDate   DateTime?
+  createdById       Int?
+  createdBy         User?     @relation("CaseCreatedBy", fields: [createdById], references: [id])
+  updatedById       Int?
+  updatedBy         User?     @relation("CaseUpdatedBy", fields: [updatedById], references: [id])
 
   assessments          Assessment[]
   interactionSummaries InteractionSummary[]
+  tasks                Task[]
+  carePlans            CarePlan[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([clientId, programEnrollmentId])
   @@index([assignedCaseManagerId])
+  @@index([referralId])
 }
 
 // Entry-stage (dataCollectionStage = 1) HUD assessment. One row per
@@ -359,9 +402,437 @@ model InteractionSummary {
   meetingNotes String? @db.Text
   nextSteps    String? @db.Text
 
+  // `case-workspace` additions — HUD-coded-scalar convention for the two
+  // option-list fields; `relatedRecordType`/`relatedRecordId` are a
+  // polymorphic pointer (e.g. a referral or care plan this summary
+  // originated from), resolved by the reading service, not a Prisma relation.
+  interactionPurpose  String?
+  confidentialityType String?
+  partnerAccount      String?
+  offering             String?
+  relatedRecordType    String?
+  relatedRecordId      String?
+
+  tasks Task[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([clientId])
   @@index([caseId])
+}
+
+// Shared across the app (Overview tab's Tasks card, care-plan goal tasks,
+// an interaction summary's optional "Create a Task" block) — see
+// `case-workspace`'s design.md Decision 3. `goalAssignmentId` is a plain
+// scalar (no `@relation`) until `GoalAssignment` exists later in this file.
+model Task {
+  id                 String    @id @default(uuid())
+  subject            String
+  description        String?   @db.Text
+  status             String    @default("open")
+  priority           String?
+  // Distinguishes a plain case task from a care-plan-goal task from a
+  // follow-up task without a second table.
+  subtype            String?
+  dueDate            DateTime?
+  ownerId            Int?
+  owner              User?     @relation(fields: [ownerId], references: [id])
+  clientId           String
+  client             Client    @relation(fields: [clientId], references: [id])
+  caseId             String?
+  case               Case?     @relation(fields: [caseId], references: [id])
+  goalAssignmentId   String?
+  goalAssignment     GoalAssignment? @relation(fields: [goalAssignmentId], references: [id])
+  interactionSummaryId String?
+  interactionSummary   InteractionSummary? @relation(fields: [interactionSummaryId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([caseId])
+  @@index([goalAssignmentId])
+  @@index([interactionSummaryId])
+}
+
+// "Authorization to Release and Receive Confidential Information" — signed
+// by the shared `ReleaseOfInformationForm` component, consumed by the Plan
+// tab's refer-to-partner flow and the Health and Wellness tab. Active
+// consent (design.md Decision 7) is `revokedAt IS NULL AND expiresOn > now()`
+// — computed at read time in `releaseOfInformation.service.ts`, never a
+// stored boolean.
+model ReleaseOfInformation {
+  id     String @id @default(uuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+
+  recipientOrgName       String
+  recipientContactName   String?
+  recipientContactEmail  String?
+  recipientContactPhone  String?
+
+  infoCaseManagement     Boolean @default(false)
+  infoDayToDayActivity   Boolean @default(false)
+  infoMentalHealth       Boolean @default(false)
+  infoChemicalDependency Boolean @default(false)
+  infoHivAids            Boolean @default(false)
+  infoOther              Boolean @default(false)
+  infoOtherSpecify       String?
+
+  purpose String? @db.Text
+
+  // Signature pad output (PNG data URL) — `@db.LongText` since a data URL
+  // can exceed a plain TEXT column's ~64KB limit at higher canvas
+  // resolutions even for a simple stroke.
+  clientSignature String?   @db.LongText
+  clientSignedAt  DateTime?
+  staffSignature  String?   @db.LongText
+  staffSignedAt   DateTime?
+
+  expiresOn DateTime
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+}
+
+// Seed-data catalog (not user-editable in this change — see design.md
+// Decision 4). `POST /api/care-plans` clones a template's goals/tasks as
+// starting `GoalAssignment`/`Task` rows; there is no live link back to the
+// template after that.
+model CarePlanTemplate {
+  id          String  @id @default(uuid())
+  name        String
+  description String? @db.Text
+  isPublished Boolean @default(false)
+
+  goals     CarePlanTemplateGoal[]
+  carePlans CarePlan[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CarePlanTemplateGoal {
+  id            String @id @default(uuid())
+  templateId    String
+  template      CarePlanTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name          String
+  description   String? @db.Text
+  priority      String?
+  serviceDomain String?
+
+  tasks CarePlanTemplateTask[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([templateId])
+}
+
+model CarePlanTemplateTask {
+  id             String @id @default(uuid())
+  templateGoalId String
+  templateGoal   CarePlanTemplateGoal @relation(fields: [templateGoalId], references: [id], onDelete: Cascade)
+  subject        String
+  description    String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([templateGoalId])
+}
+
+// Seeded catalog of suggested goals, picked from in the wizard's Goals step
+// or referenced by a template goal — see design.md Decision 4.
+model GoalDefinition {
+  id            String  @id @default(uuid())
+  name          String
+  description   String? @db.Text
+  serviceDomain String?
+
+  goalAssignments GoalAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Status values: Proposed | Draft | Active | Completed | Cancelled — plain
+// String per the repo's HUD-coded-scalar convention, not a Prisma enum.
+model CarePlan {
+  id          String    @id @default(uuid())
+  caseId      String
+  case        Case      @relation(fields: [caseId], references: [id])
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id])
+  name        String
+  description String?   @db.Text
+  status      String    @default("Proposed")
+  startDate   DateTime?
+  endDate     DateTime?
+  templateId  String?
+  template    CarePlanTemplate? @relation(fields: [templateId], references: [id])
+
+  goals GoalAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([caseId])
+  @@index([clientId])
+}
+
+// Priority: High | Medium | Low. Status: Not Started | In Progress |
+// Completed | Canceled — both plain Strings per convention. Its tasks live
+// in the shared `Task` table via `Task.goalAssignmentId`, not a child table
+// here (design.md Decision 3).
+model GoalAssignment {
+  id               String   @id @default(uuid())
+  carePlanId       String
+  carePlan         CarePlan @relation(fields: [carePlanId], references: [id])
+  goalDefinitionId String?
+  goalDefinition   GoalDefinition? @relation(fields: [goalDefinitionId], references: [id])
+  name             String
+  description      String?  @db.Text
+  priority         String?
+  status           String   @default("Not Started")
+  serviceDomain    String?
+
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([carePlanId])
+}
+
+// Partner agencies a goal's service gap can be referred to — see design.md
+// Decision 7. `contactEmail` absent flags the agency as "can't be reached
+// yet" in the Refer to Partner Agency flow.
+model Organization {
+  id           String  @id @default(uuid())
+  name         String
+  address      String?
+  contactEmail String?
+  isPartner    Boolean @default(true)
+
+  serviceDomains      OrganizationServiceDomain[]
+  referralsAsProvider Referral[] @relation("ReferralProvider")
+  referralsAsReferrer Referral[] @relation("ReferralReferrer")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrganizationServiceDomain {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  serviceDomain  String
+
+  @@unique([organizationId, serviceDomain])
+  @@index([organizationId])
+}
+
+// One table serves both the Referrals tab (`POST /api/referrals`) and the
+// Plan tab's partner-referral path (`POST /api/referrals/external`) — see
+// design.md Decision 8. `isExternal` plus which contact fields are
+// populated is what distinguishes them; `Case.referralId` (a case's
+// originating referral) and `Referral.caseId` (this referral's case, for the
+// Referrals tab list) are deliberately separate relations.
+model Referral {
+  id     String @id @default(uuid())
+  title  String
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+  caseId   String?
+  case     Case?  @relation("CaseReferrals", fields: [caseId], references: [id])
+  programId String?
+  program   Program? @relation(fields: [programId], references: [id])
+  providerOrgId String?
+  providerOrg   Organization? @relation("ReferralProvider", fields: [providerOrgId], references: [id])
+  referrerOrgId String?
+  referrerOrg   Organization? @relation("ReferralReferrer", fields: [referrerOrgId], references: [id])
+
+  referralDate DateTime @default(now())
+  type         String?
+  status       String   @default("pending")
+  priority     String?
+  category     String?
+  outcome      String?
+  description  String?  @db.Text
+  comments     String?  @db.Text
+
+  // Contact snapshots at referral time — free text, not FKs, since a
+  // referral should keep its own record even if the underlying
+  // client/provider/referrer contact details change later. For an external
+  // referral sent without active ROI consent, `clientContact` holds initials
+  // only (see design.md Decision 7).
+  clientContact   String?
+  providerContact String?
+  referrerContact String?
+
+  caseManagerComments String? @db.Text
+  declineReason       String?
+  declineNotes        String? @db.Text
+  isExternal          Boolean @default(false)
+
+  originatingForCases Case[] @relation("CaseOriginatingReferral")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([caseId])
+  @@index([providerOrgId])
+}
+
+// Pulled forward from the Services tab's migration (originally planned for
+// Group 6) because Plan-tab service-gap detection (design.md Decision 6)
+// needs `Benefit` to exist — `ServiceDisbursement`/`Bed*` stay in Group 6's
+// migration since only Services needs those.
+model Benefit {
+  id            String  @id @default(uuid())
+  programId     String
+  program       Program @relation(fields: [programId], references: [id])
+  name          String
+  serviceDomain String?
+
+  assignments BenefitAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programId])
+}
+
+model BenefitAssignment {
+  id                  String            @id @default(uuid())
+  programEnrollmentId String
+  programEnrollment   ProgramEnrollment @relation(fields: [programEnrollmentId], references: [id])
+  benefitId           String
+  benefit             Benefit           @relation(fields: [benefitId], references: [id])
+  status              String            @default("active")
+
+  disbursements ServiceDisbursement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programEnrollmentId])
+  @@index([benefitId])
+}
+
+// Clinical read model for the Health and Wellness tab — filled by an EHR
+// adapter (see design.md Decision 10). The only implementation shipped in
+// this change is a no-op, so nothing ever inserts a row into these two
+// tables today; the shape exists so a future change can plug in a real
+// adapter with zero schema change.
+model ClinicalSummary {
+  id                 String    @id @default(uuid())
+  clientId           String    @unique
+  client             Client    @relation(fields: [clientId], references: [id])
+  lastVisitDate      DateTime?
+  nextAppointmentDate DateTime?
+  openFollowUpsCount Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ClinicalEncounter {
+  id              String   @id @default(uuid())
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id])
+  encounterNumber String
+  encounterDate   DateTime
+  type            String
+  location        String?
+  provider        String?
+  status          String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+}
+
+model ServiceDisbursement {
+  id                  String            @id @default(uuid())
+  benefitAssignmentId String
+  benefitAssignment   BenefitAssignment @relation(fields: [benefitAssignmentId], references: [id])
+  recipientClientId   String
+  recipientClient     Client            @relation(fields: [recipientClientId], references: [id])
+  disbursementType    String
+  status              String            @default("pending")
+  disbursementDate    DateTime          @default(now())
+  description         String?           @db.Text
+  triggerReason       String?
+  voucherNumber       String?
+  voucherAmount       Decimal?          @db.Decimal(10, 2)
+  bedIdentifier       String?
+  shift               String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([benefitAssignmentId])
+  @@index([recipientClientId])
+}
+
+// Minimal bed model — scoped to what the Services tab's "Assign Bed" and
+// Daily Log need; a future Shelter Management change extends this with real
+// capacity/waitlist management. `shift` lives on the assignment itself (not
+// only on `BedNight`) so "same bed/date/shift" exclusion is computable — see
+// design.md Decision 9's implementation note.
+model Bed {
+  id         String  @id @default(uuid())
+  programId  String
+  program    Program @relation(fields: [programId], references: [id])
+  identifier String
+  isActive   Boolean @default(true)
+
+  assignments BedAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programId])
+}
+
+model BedAssignment {
+  id                  String            @id @default(uuid())
+  programEnrollmentId String
+  programEnrollment   ProgramEnrollment @relation(fields: [programEnrollmentId], references: [id])
+  bedId               String
+  bed                 Bed               @relation(fields: [bedId], references: [id])
+  shift               String
+  startDate           DateTime          @default(now())
+  endDate             DateTime?
+
+  nights BedNight[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programEnrollmentId])
+  @@index([bedId])
+}
+
+model BedNight {
+  id              String        @id @default(uuid())
+  bedAssignmentId String
+  bedAssignment   BedAssignment @relation(fields: [bedAssignmentId], references: [id])
+  logDate         DateTime      @db.Date
+  shift           String
+  status          String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([bedAssignmentId, logDate, shift])
+  @@index([bedAssignmentId])
 }

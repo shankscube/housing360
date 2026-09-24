@@ -10,6 +10,14 @@ import { referenceRouter } from './reference.routes';
 import { assessmentRouter } from './assessment.routes';
 import { disabilityRouter } from './disability.routes';
 import { interactionSummaryRouter } from './interactionSummary.routes';
+import { taskRouter } from './task.routes';
+import { userRouter } from './user.routes';
+import { releaseOfInformationRouter } from './releaseOfInformation.routes';
+import { carePlanRouter } from './carePlan.routes';
+import { referralRouter } from './referral.routes';
+import { serviceRouter } from './service.routes';
+import { bedRouter } from './bed.routes';
+import { healthWellnessRouter } from './healthWellness.routes';
 
 export const apiRouter = Router();
 
@@ -31,3 +39,11 @@ apiRouter.use('/api', referenceRouter);
 apiRouter.use('/api', assessmentRouter);
 apiRouter.use('/api', disabilityRouter);
 apiRouter.use('/api', interactionSummaryRouter);
+apiRouter.use('/api', taskRouter);
+apiRouter.use('/api', userRouter);
+apiRouter.use('/api', releaseOfInformationRouter);
+apiRouter.use('/api', carePlanRouter);
+apiRouter.use('/api', referralRouter);
+apiRouter.use('/api', serviceRouter);
+apiRouter.use('/api', bedRouter);
+apiRouter.use('/api', healthWellnessRouter);

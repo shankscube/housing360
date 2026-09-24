@@ -10,6 +10,9 @@ import { gatedFieldPreview } from './stories/GatedField.stories';
 import { dualListboxPreview } from './stories/DualListbox.stories';
 import { stepRailPreview } from './stories/StepRail.stories';
 import { tabsPreview } from './stories/Tabs.stories';
+import { modalPreview } from './stories/Modal.stories';
+import { expandableRowPreview } from './stories/ExpandableRow.stories';
+import { signaturePadPreview } from './stories/SignaturePad.stories';
 import type { ComponentPreview } from './stories/types';
 
 const PREVIEWS: ComponentPreview[] = [
@@ -25,6 +28,9 @@ const PREVIEWS: ComponentPreview[] = [
   dualListboxPreview,
   stepRailPreview,
   tabsPreview,
+  modalPreview,
+  expandableRowPreview,
+  signaturePadPreview,
 ];
 
 /**

@@ -39,6 +39,18 @@ export function findAssessmentById(id: string): Promise<AssessmentRow | null> {
   return prisma.assessment.findUnique({ where: { id } });
 }
 
+/** `case-workspace`'s Assessments tab list — every stage recorded for an enrollment, not just Entry. */
+export function findAssessmentsByEnrollment(programEnrollmentId: string): Promise<AssessmentRow[]> {
+  return prisma.assessment.findMany({
+    where: { programEnrollmentId },
+    orderBy: { dataCollectionStage: 'asc' },
+  });
+}
+
+export function deleteAssessment(id: string): Promise<AssessmentRow> {
+  return prisma.assessment.delete({ where: { id } });
+}
+
 /** Upsert keyed on the compound unique `(programEnrollmentId, dataCollectionStage)` —
  * required so re-saving the same enrollment's Entry Assessment (steps 4-6
  * resubmitted) never creates a second row. See design.md's "Exactly one Entry

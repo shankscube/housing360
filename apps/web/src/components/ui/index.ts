@@ -13,3 +13,6 @@ export * from './DualListbox';
 export * from './StepRail';
 export * from './Toast';
 export * from './Tabs';
+export * from './Modal';
+export * from './ExpandableRow';
+export * from './SignaturePad';

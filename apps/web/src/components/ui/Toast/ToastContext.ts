@@ -1,7 +1,10 @@
 import { createContext, useContext } from 'react';
 
+export type ToastTone = 'error' | 'success';
+
 export interface ToastContextValue {
-  showToast: (message: string) => void;
+  /** `tone` defaults to `'error'` — every existing call site is a validation/failure message. */
+  showToast: (message: string, tone?: ToastTone) => void;
 }
 
 export const ToastContext = createContext<ToastContextValue | null>(null);

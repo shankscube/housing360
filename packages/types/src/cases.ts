@@ -1,3 +1,5 @@
+import type { HudOption } from './hudOptions';
+
 export interface Case {
   id: string;
   clientId: string;
@@ -14,6 +16,9 @@ export interface EnsureCaseInput {
 }
 
 export type CasePriority = 'high' | 'medium' | 'low';
+
+/** `none | 30 | 60 | 90` — see `case-workspace`'s design.md Decision 2. */
+export type FollowUpMilestone = 'none' | '30' | '60' | '90';
 
 /** Case Operations Center's Status column values — `status` stays a free-form
  * String on the Prisma model (per the repo's HUD-coded-scalar convention),
@@ -38,6 +43,28 @@ export interface CaseListItem {
   updatedAt: string;
 }
 
+/** Overview/header fields `case-workspace` adds on top of `CaseListItem`. */
+export interface CaseWorkspaceFields {
+  description: string | null;
+  stage: string | null;
+  origin: string | null;
+  escalated: boolean;
+  contact: string | null;
+  referralId: string | null;
+  openedDate: string;
+  closedAt: string | null;
+  nextHmisReviewDue: string | null;
+  hmisDataQualityStatus: string | null;
+  followUpMilestone: FollowUpMilestone;
+  followUpDueDate: string | null;
+  createdById: number | null;
+  createdByName: string | null;
+  updatedById: number | null;
+  updatedByName: string | null;
+  programName: string | null;
+  enrollmentName: string | null;
+}
+
 export type CaseFilter =
   | 'all'
   | 'myCaseload'
@@ -53,11 +80,18 @@ export interface CaseListQuery {
   search?: string;
 }
 
+export interface CaseTrend {
+  percent: number;
+  direction: 'up' | 'down' | 'flat';
+}
+
 export interface CaseKpiCounts {
   activeCases: number;
   highRisk: number;
   dueToday: number;
   closedCases: number;
+  /** Active Cases vs. the count active at the end of last calendar month — see `case-workspace`'s design.md. */
+  activeCasesTrend: CaseTrend;
 }
 
 /**
@@ -87,24 +121,55 @@ export type CaseTabKey =
 /** `hudData` is never reported here — its "content" is the always-available, computed checklist (see `GET /api/cases/:id/hud-data`), not a readiness flag. */
 export type CaseTabsWithContent = Record<Exclude<CaseTabKey, 'hudData'>, boolean>;
 
-export interface CaseDetail extends CaseListItem {
+export interface CaseDetail extends CaseListItem, CaseWorkspaceFields {
   programEnrollmentId: string;
   tabsWithContent: CaseTabsWithContent;
 }
 
+/** `subject` is now required — a case without one is rejected (see the `case-management` spec delta). */
 export interface CaseCreateInput {
   clientId: string;
-  subject?: string;
+  subject: string;
+  description?: string;
   priority?: CasePriority;
+  status?: string;
+  stage?: string;
+  origin?: string;
+  escalated?: boolean;
+  contact?: string;
+  referralId?: string;
+  openedDate?: string;
   assignedCaseManagerId?: number;
 }
 
 export interface CaseUpdateInput {
   subject?: string;
+  description?: string | null;
   status?: string;
   priority?: CasePriority;
+  stage?: string | null;
+  origin?: string | null;
+  escalated?: boolean;
+  contact?: string | null;
+  referralId?: string | null;
   lastContactDate?: string | null;
   assignedCaseManagerId?: number | null;
+  hmisDataQualityStatus?: string | null;
+  nextHmisReviewDue?: string | null;
+}
+
+export interface CaseFollowUpInput {
+  milestone: FollowUpMilestone;
+}
+
+/** `GET /api/reference/case-options` response shape — served alongside `hud-options`, never hardcoded on the frontend. */
+export interface CaseOptionsResponse {
+  stage: HudOption[];
+  origin: HudOption[];
+  status: HudOption[];
+  hmisDataQualityStatus: HudOption[];
+  interactionPurpose: HudOption[];
+  confidentialityType: HudOption[];
 }
 
 /** One HUD-required data point, evaluated at request time — never persisted. */

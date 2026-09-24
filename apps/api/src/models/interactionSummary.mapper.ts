@@ -10,6 +10,10 @@ export function toInteractionSummary(row: InteractionSummaryRow): InteractionSum
     status: row.status,
     meetingNotes: row.meetingNotes,
     nextSteps: row.nextSteps,
+    interactionPurpose: row.interactionPurpose,
+    confidentialityType: row.confidentialityType,
+    partnerAccount: row.partnerAccount,
+    offering: row.offering,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

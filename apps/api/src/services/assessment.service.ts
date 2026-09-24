@@ -1,7 +1,9 @@
-import type { Assessment, AssessmentInput, AssessmentUpdateInput } from '@housing360/types';
+import type { Assessment, AssessmentInput, AssessmentListItem, AssessmentUpdateInput } from '@housing360/types';
 import {
+  deleteAssessment as deleteAssessmentRow,
   findAssessmentByEnrollmentAndStage,
   findAssessmentById,
+  findAssessmentsByEnrollment,
   stageParamToDataCollectionStage,
   updateAssessment as updateAssessmentRow,
   upsertAssessment,
@@ -55,6 +57,30 @@ export async function createOrUpsertAssessment(
   );
 
   return toAssessment(row);
+}
+
+/** `case-workspace`'s Assessments tab — every stage on this enrollment, not just Entry. `score` is always `null` (design.md Non-Goals). */
+export async function listAssessmentsByEnrollment(programEnrollmentId: string): Promise<AssessmentListItem[]> {
+  const rows = await findAssessmentsByEnrollment(programEnrollmentId);
+  return rows.map((row) => ({
+    id: row.id,
+    programEnrollmentId: row.programEnrollmentId,
+    dataCollectionStage: row.dataCollectionStage,
+    assessmentDate: row.assessmentDate.toISOString(),
+    status: row.status,
+    score: null,
+  }));
+}
+
+export async function discardAssessment(id: string): Promise<void> {
+  const existing = await findAssessmentById(id);
+  if (!existing) {
+    throw new AppError(404, 'Assessment not found');
+  }
+  if (existing.status !== 'in_progress') {
+    throw new AppError(400, 'Only a draft assessment can be discarded');
+  }
+  await deleteAssessmentRow(id);
 }
 
 /** `PATCH /assessments/:id` — plain update by id; sets whichever fields were provided. */

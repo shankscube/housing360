@@ -3,7 +3,9 @@ import type {
   Assessment,
   AssessmentInput,
   AssessmentUpdateInput,
+  AuthenticatedUser,
   Case,
+  CaseOptionsResponse,
   Client,
   ClientIntakeInput,
   ClientSearchResultItem,
@@ -133,4 +135,20 @@ export function createInteractionSummary(input: InteractionSummaryInput) {
 
 export function getHudOptions() {
   return apiClient.get<HudOptionsResponse>('/api/reference/hud-options');
+}
+
+// ---------------------------------------------------------------------------
+// case-workspace endpoints
+// ---------------------------------------------------------------------------
+
+export function getCaseOptions() {
+  return apiClient.get<CaseOptionsResponse>('/api/reference/case-options');
+}
+
+export function getUsers() {
+  return apiClient.get<AuthenticatedUser[]>('/api/users');
+}
+
+export function searchClientsByName(name: string) {
+  return apiClient.get<ClientSearchResultItem[]>(`/api/clients/search?name=${encodeURIComponent(name)}`);
 }

@@ -125,6 +125,20 @@ export interface Assessment
   updatedAt: string;
 }
 
+/**
+ * The Assessments tab's list-row shape (`case-workspace`) — `score` is a
+ * placeholder (always `null`) since no scoring engine exists yet; see
+ * design.md's Non-Goals.
+ */
+export interface AssessmentListItem {
+  id: string;
+  programEnrollmentId: string;
+  dataCollectionStage: number;
+  assessmentDate: string;
+  status: string;
+  score: number | null;
+}
+
 export type AssessmentInput = AssessmentLivingSituation &
   AssessmentIncomeBenefitsInsurance &
   AssessmentHealthDv & {

@@ -1,5 +1,11 @@
 import { NextFunction, Request, Response } from 'express';
-import type { CaseCreateInput, CaseFilter, CaseUpdateInput, EnsureCaseInput } from '@housing360/types';
+import type {
+  CaseCreateInput,
+  CaseFilter,
+  CaseFollowUpInput,
+  CaseUpdateInput,
+  EnsureCaseInput,
+} from '@housing360/types';
 import {
   createCase,
   ensureCase,
@@ -7,6 +13,7 @@ import {
   getCaseHudData,
   listCases,
   updateCase,
+  updateCaseFollowUp,
 } from '../services/case.service';
 import { sendSuccess } from '../utils/responder';
 import { AppError } from '../utils/AppError';
@@ -93,10 +100,13 @@ export async function createCaseHandler(req: Request, res: Response, next: NextF
     // Defaults the new case to whoever is creating it — the seeded demo user
     // is the only case manager today (see design.md); an explicit
     // `assignedCaseManagerId` in the body still wins.
-    const caseDetail = await createCase({
-      ...(input as CaseCreateInput),
-      assignedCaseManagerId: input.assignedCaseManagerId ?? req.user.id,
-    });
+    const caseDetail = await createCase(
+      {
+        ...(input as CaseCreateInput),
+        assignedCaseManagerId: input.assignedCaseManagerId ?? req.user.id,
+      },
+      req.user.id
+    );
     sendSuccess(res, { code: 201, message: 'Case created', data: caseDetail });
   } catch (err) {
     next(err);
@@ -105,13 +115,36 @@ export async function createCaseHandler(req: Request, res: Response, next: NextF
 
 export async function updateCaseHandler(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!req.user) {
+      throw new AppError(401, 'Not authenticated');
+    }
     const { id } = req.params;
     if (!id) {
       throw new AppError(400, 'Case id is required');
     }
     const input = req.body as CaseUpdateInput;
-    const caseDetail = await updateCase(id, input);
+    const caseDetail = await updateCase(id, input, req.user.id);
     sendSuccess(res, { code: 200, message: 'Case updated', data: caseDetail });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateCaseFollowUpHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) {
+      throw new AppError(401, 'Not authenticated');
+    }
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, 'Case id is required');
+    }
+    const input = req.body as Partial<CaseFollowUpInput> | undefined;
+    if (!input?.milestone) {
+      throw new AppError(400, 'milestone is required');
+    }
+    const caseDetail = await updateCaseFollowUp(id, input as CaseFollowUpInput, req.user.id);
+    sendSuccess(res, { code: 200, message: 'Follow-up updated', data: caseDetail });
   } catch (err) {
     next(err);
   }

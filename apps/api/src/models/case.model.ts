@@ -18,6 +18,9 @@ export type CaseRow = Prisma.CaseGetPayload<Record<string, never>>;
 const LIST_INCLUDE = {
   client: { select: { firstName: true, lastName: true } },
   assignedCaseManager: { select: { id: true, firstName: true, lastName: true } },
+  createdBy: { select: { id: true, firstName: true, lastName: true } },
+  updatedBy: { select: { id: true, firstName: true, lastName: true } },
+  programEnrollment: { select: { name: true, program: { select: { name: true } } } },
 } satisfies Prisma.CaseInclude;
 
 export type CaseListRow = Prisma.CaseGetPayload<{ include: typeof LIST_INCLUDE }>;
@@ -122,6 +125,15 @@ export async function findCases({
   return { rows, total };
 }
 
+/** Health and Wellness tab readiness — "clinical data" means either table has a row (see `case-workspace` design.md Decision 10); nothing writes to them via the no-op EHR adapter today, but a future adapter could. */
+export async function hasClinicalData(clientId: string): Promise<boolean> {
+  const [summary, encounterCount] = await Promise.all([
+    prisma.clinicalSummary.findUnique({ where: { clientId }, select: { id: true } }),
+    prisma.clinicalEncounter.count({ where: { clientId } }),
+  ]);
+  return summary !== null || encounterCount > 0;
+}
+
 export interface CaseKpiCountRows {
   activeCases: number;
   highRisk: number;
@@ -137,6 +149,22 @@ export async function countCaseKpis(): Promise<CaseKpiCountRows> {
     prisma.case.count({ where: { status: 'closed' } }),
   ]);
   return { activeCases, highRisk, dueToday, closedCases };
+}
+
+/**
+ * "Active as of the end of last month" is computed from `openedDate`/`closedAt`
+ * rather than a stored historical snapshot — a case counts if it had already
+ * been opened by then and either isn't closed yet or closed after that date.
+ * No new table needed; consistent with the rest of this app's
+ * "computed, not stored" KPI/checklist convention.
+ */
+export async function countActiveCasesAsOf(date: Date): Promise<number> {
+  return prisma.case.count({
+    where: {
+      openedDate: { lte: date },
+      OR: [{ closedAt: null }, { closedAt: { gt: date } }],
+    },
+  });
 }
 
 export function findCaseById(id: string): Promise<CaseListRow | null> {
@@ -200,9 +228,18 @@ export function findCaseByClientAndEnrollment(
 export interface CaseCreateData {
   clientId: string;
   programEnrollmentId: string;
-  subject?: string | null;
+  subject: string;
+  description?: string | null;
+  status?: string;
   priority?: string | null;
+  stage?: string | null;
+  origin?: string | null;
+  escalated?: boolean;
+  contact?: string | null;
+  referralId?: string | null;
+  openedDate?: Date;
   assignedCaseManagerId?: number | null;
+  createdById?: number | null;
 }
 
 export async function createCase(data: CaseCreateData): Promise<CaseListRow> {
@@ -210,7 +247,7 @@ export async function createCase(data: CaseCreateData): Promise<CaseListRow> {
     try {
       const caseNumber = await generateCaseNumber();
       return await prisma.case.create({
-        data: { ...data, caseNumber, status: 'open' },
+        data: { ...data, caseNumber, status: data.status ?? 'open' },
         include: LIST_INCLUDE,
       });
     } catch (err) {
@@ -224,13 +261,32 @@ export async function createCase(data: CaseCreateData): Promise<CaseListRow> {
 }
 
 export interface CaseUpdateData {
-  subject?: string | null;
+  subject?: string;
+  description?: string | null;
   status?: string;
   priority?: string | null;
+  stage?: string | null;
+  origin?: string | null;
+  escalated?: boolean;
+  contact?: string | null;
+  referralId?: string | null;
   lastContactDate?: Date | null;
   assignedCaseManagerId?: number | null;
+  hmisDataQualityStatus?: string | null;
+  nextHmisReviewDue?: Date | null;
+  updatedById?: number | null;
 }
 
 export function updateCase(id: string, data: CaseUpdateData): Promise<CaseListRow> {
+  return prisma.case.update({ where: { id }, data, include: LIST_INCLUDE });
+}
+
+export interface CaseFollowUpData {
+  followUpMilestone: string;
+  followUpDueDate: Date | null;
+  updatedById?: number | null;
+}
+
+export function updateCaseFollowUp(id: string, data: CaseFollowUpData): Promise<CaseListRow> {
   return prisma.case.update({ where: { id }, data, include: LIST_INCLUDE });
 }

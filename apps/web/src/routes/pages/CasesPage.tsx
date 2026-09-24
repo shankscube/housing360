@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { CaseFilter, CaseListItem } from '@housing360/types';
+import type { CaseFilter, CaseListItem, CaseTrend } from '@housing360/types';
 import { ContentAreaTemplate } from '../../components/layout/ContentAreaTemplate';
-import { DataTable, FilterChipRow, Icon, StatusBadge, type DataTableColumn } from '../../components/ui';
+import {
+  Button,
+  DataTable,
+  FilterChipRow,
+  Icon,
+  StatusBadge,
+  ToastProvider,
+  type DataTableColumn,
+} from '../../components/ui';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchCases, setListFilter, setListPage, setSearchTerm } from '../../store/slices/casesSlice';
+import { NewCaseModal } from '../../features/cases/newCase/NewCaseModal';
+import { casePriorityLabel, caseStatusLabel } from '../../features/cases/shared/caseLabels';
 
 const FILTER_OPTIONS: { value: CaseFilter; label: string }[] = [
   { value: 'all', label: 'All Cases' },
@@ -25,25 +35,20 @@ const COLUMN_LABELS = {
   caseManager: 'Case Manager',
 } as const;
 
-/** `open` (the default `cases/ensure` assigns) reads as "Active" until a case manager explicitly moves it along — see this change's design.md. */
-function caseStatusLabel(status: string): string {
-  if (status === 'open' || status === 'active') return 'Active';
-  if (status === 'pending_review') return 'Pending Review';
-  if (status === 'closed') return 'Closed';
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function casePriorityLabel(priority: string | null): string | null {
-  if (!priority) return null;
-  return priority.charAt(0).toUpperCase() + priority.slice(1);
-}
-
 function formatDate(value: string | null): string {
   if (!value) return '—';
   return new Date(value).toLocaleDateString();
 }
 
 interface CaseTableRow extends CaseListItem, Record<string, unknown> {}
+
+function trendSubLine(trend: CaseTrend): string {
+  if (trend.direction === 'flat') {
+    return 'No change vs last month';
+  }
+  const arrow = trend.direction === 'up' ? '▲' : '▼';
+  return `${arrow} ${trend.percent}% vs last month`;
+}
 
 export function CasesPage() {
   const dispatch = useAppDispatch();
@@ -53,6 +58,7 @@ export function CasesPage() {
   );
 
   const [searchInput, setSearchInput] = useState(search);
+  const [showNewCaseModal, setShowNewCaseModal] = useState(false);
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -108,7 +114,12 @@ export function CasesPage() {
 
   const kpiTiles = kpis
     ? [
-        { value: kpis.activeCases, label: 'Active Cases', tone: 'teal' as const },
+        {
+          value: kpis.activeCases,
+          label: 'Active Cases',
+          tone: 'teal' as const,
+          subLine: trendSubLine(kpis.activeCasesTrend),
+        },
         { value: kpis.highRisk, label: 'High Risk', tone: 'coral' as const },
         { value: kpis.dueToday, label: 'Due Today', tone: 'gold' as const },
         { value: kpis.closedCases, label: 'Closed Cases', tone: 'quiet' as const },
@@ -116,41 +127,50 @@ export function CasesPage() {
     : [];
 
   return (
-    <ContentAreaTemplate
-      title="Cases"
-      subtitle="Track case status, priority, and follow-up across your caseload."
-      kpiTiles={kpiTiles}
-    >
-      <div className="overflow-hidden rounded-2xl bg-surface shadow-card">
-        <div className="flex flex-col gap-5 px-9 py-7">
-          <FilterChipRow options={FILTER_OPTIONS} activeValue={filter} onChange={handleFilterChange} />
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Search cases by case number, subject, or client name"
-            aria-label="Search cases"
-            className="w-full rounded-md border border-borderStrong bg-surface px-7 py-4 text-base text-ink outline-none transition-colors focus:border-ink"
+    <ToastProvider>
+      <ContentAreaTemplate
+        title="Cases"
+        subtitle="Track case status, priority, and follow-up across your caseload."
+        kpiTiles={kpiTiles}
+      >
+        <div className="overflow-hidden rounded-2xl bg-surface shadow-card">
+          <div className="flex flex-col gap-5 px-9 py-7">
+            <div className="flex flex-wrap items-center justify-between gap-6">
+              <FilterChipRow options={FILTER_OPTIONS} activeValue={filter} onChange={handleFilterChange} />
+              <Button variant="secondary" size="sm" onClick={() => setShowNewCaseModal(true)}>
+                New Case
+              </Button>
+            </div>
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="Search cases by case number, subject, or client name"
+              aria-label="Search cases"
+              className="w-full rounded-md border border-borderStrong bg-surface px-7 py-4 text-base text-ink outline-none transition-colors focus:border-ink"
+            />
+          </div>
+
+          <DataTable<CaseTableRow>
+            columns={columns}
+            rows={items as CaseTableRow[]}
+            rowKey={(row) => row.id}
+            isLoading={status === 'loading'}
+            emptyMessage={emptyMessage}
+            rowActions={[
+              {
+                key: 'view',
+                label: 'Open case',
+                icon: <Icon name="chevronRight" size={14} />,
+                onClick: handleViewCase,
+              },
+            ]}
+            pagination={{ page, pageSize, total, onPageChange: (nextPage) => dispatch(setListPage(nextPage)) }}
           />
         </div>
+      </ContentAreaTemplate>
 
-        <DataTable<CaseTableRow>
-          columns={columns}
-          rows={items as CaseTableRow[]}
-          rowKey={(row) => row.id}
-          isLoading={status === 'loading'}
-          emptyMessage={emptyMessage}
-          rowActions={[
-            {
-              key: 'view',
-              label: 'Open case',
-              icon: <Icon name="chevronRight" size={14} />,
-              onClick: handleViewCase,
-            },
-          ]}
-          pagination={{ page, pageSize, total, onPageChange: (nextPage) => dispatch(setListPage(nextPage)) }}
-        />
-      </div>
-    </ContentAreaTemplate>
+      <NewCaseModal isOpen={showNewCaseModal} onClose={() => setShowNewCaseModal(false)} />
+    </ToastProvider>
   );
 }

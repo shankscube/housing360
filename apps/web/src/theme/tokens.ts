@@ -247,4 +247,6 @@ export const layout = {
   logo: '154px',
   /** The nav rail user-card's account-menu popover (log out). */
   menuWidth: '176px',
+  /** `SignaturePad`'s canvas/preview height — matches its fixed canvas resolution. */
+  signaturePad: '140px',
 };

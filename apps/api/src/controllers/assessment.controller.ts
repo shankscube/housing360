@@ -2,7 +2,9 @@ import { NextFunction, Request, Response } from 'express';
 import type { AssessmentInput, AssessmentUpdateInput } from '@housing360/types';
 import {
   createOrUpsertAssessment,
+  discardAssessment,
   getAssessmentForEnrollment,
+  listAssessmentsByEnrollment,
   patchAssessment,
 } from '../services/assessment.service';
 import { sendSuccess } from '../utils/responder';
@@ -27,6 +29,32 @@ export async function getEnrollmentAssessmentHandler(
       message: assessment ? 'Assessment retrieved' : 'No assessment recorded yet',
       data: assessment,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listEnrollmentAssessmentsHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, 'Program enrollment id is required');
+    }
+    const assessments = await listAssessmentsByEnrollment(id);
+    sendSuccess(res, { code: 200, message: 'Assessments retrieved', data: assessments });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function discardAssessmentHandler(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, 'Assessment id is required');
+    }
+    await discardAssessment(id);
+    sendSuccess(res, { code: 200, message: 'Assessment discarded', data: null });
   } catch (err) {
     next(err);
   }

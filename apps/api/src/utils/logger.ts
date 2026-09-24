@@ -15,6 +15,10 @@ export const logger = pino({
   // (e.g. the intake wizard's family-member bulk-create array). mobile/email
   // are redacted too, extended here alongside ssn/dob per the client-intake-wizard
   // change — not automatic, so extend this list whenever a new PII field is added.
+  // `description`/`notes` cover `case-workspace`'s free-text fields (Task
+  // description, Case description, referral/disbursement notes) — same
+  // rationale as meetingNotes/nextSteps: case-manager free text can contain
+  // client-identifying detail.
   redact: {
     paths: [
       'req.body.ssn.value',
@@ -23,6 +27,10 @@ export const logger = pino({
       'req.body.email',
       'req.body.meetingNotes',
       'req.body.nextSteps',
+      'req.body.description',
+      'req.body.notes',
+      'req.body.clientSignature',
+      'req.body.staffSignature',
       'req.body.*.ssn.value',
       'req.body.*.dob.value',
       'req.body.*.mobile',
